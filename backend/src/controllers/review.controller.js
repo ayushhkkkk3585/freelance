@@ -63,6 +63,14 @@ class ReviewController {
       });
       await review.save();
       
+      // Update request to track client review submission
+      if (isClient) {
+        await Request.findByIdAndUpdate(requestId, {
+          clientReviewSubmitted: true,
+          clientReviewId: review._id,
+        });
+      }
+      
       // Notify reviewee
       const reviewerName = isClient ? request.clientId.name : request.buyerId.name;
       await notificationService.notifyNewReview(revieweeId, reviewerName, rating);

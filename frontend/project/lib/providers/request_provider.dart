@@ -118,7 +118,8 @@ class RequestProvider with ChangeNotifier {
     required int quantity,
     required String cardName,
     required String offerDetails,
-    required double finalAmount,
+    required double originalPrice,      // What client pays
+    required double discountedPrice,    // What buyer pays using card
     String? eventUrl,
     required String category,
     required String platform,
@@ -135,7 +136,8 @@ class RequestProvider with ChangeNotifier {
         quantity: quantity,
         cardName: cardName,
         offerDetails: offerDetails,
-        finalAmount: finalAmount,
+        originalPrice: originalPrice,
+        discountedPrice: discountedPrice,
         eventUrl: eventUrl,
         category: category,
         platform: platform,

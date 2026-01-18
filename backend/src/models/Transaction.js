@@ -14,7 +14,7 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['credit', 'debit', 'freeze', 'unfreeze', 'refund'],
+      enum: ['credit', 'debit', 'freeze', 'unfreeze', 'refund', 'buyer_earning', 'client_refund', 'app_profit'],
       required: true,
     },
     amount: {

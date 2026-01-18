@@ -39,11 +39,27 @@ const createRequestValidation = [
     .trim()
     .notEmpty()
     .withMessage('Card name is required'),
+  // Support both new pricing fields and legacy finalAmount
+  body('originalPrice')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('Original price must be a positive number'),
+  body('discountedPrice')
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage('Discounted price must be a positive number'),
   body('finalAmount')
-    .notEmpty()
-    .withMessage('Final amount is required')
+    .optional()
     .isFloat({ min: 0 })
     .withMessage('Final amount must be a positive number'),
+  // Custom validation: require either originalPrice or finalAmount
+  body().custom((value, { req }) => {
+    const { originalPrice, finalAmount } = req.body;
+    if (!originalPrice && !finalAmount) {
+      throw new Error('Either originalPrice or finalAmount is required');
+    }
+    return true;
+  }),
 ];
 
 // Routes

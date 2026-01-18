@@ -18,7 +18,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final _quantityController = TextEditingController(text: '1');
   final _cardNameController = TextEditingController();
   final _offerDetailsController = TextEditingController();
-  final _finalAmountController = TextEditingController();
+  final _originalPriceController = TextEditingController();
+  final _discountedPriceController = TextEditingController();
   final _eventUrlController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
@@ -32,7 +33,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     _quantityController.dispose();
     _cardNameController.dispose();
     _offerDetailsController.dispose();
-    _finalAmountController.dispose();
+    _originalPriceController.dispose();
+    _discountedPriceController.dispose();
     _eventUrlController.dispose();
     super.dispose();
   }
@@ -90,7 +92,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       quantity: int.parse(_quantityController.text),
       cardName: _cardNameController.text.trim(),
       offerDetails: _offerDetailsController.text.trim(),
-      finalAmount: double.parse(_finalAmountController.text),
+      originalPrice: double.parse(_originalPriceController.text),
+      discountedPrice: double.parse(_discountedPriceController.text),
       eventUrl: _eventUrlController.text.trim().isNotEmpty
           ? _eventUrlController.text.trim()
           : null,
@@ -305,25 +308,74 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
+              // Pricing Section
+              _buildSectionTitle('Pricing'),
+              const SizedBox(height: 8),
               TextFormField(
-                controller: _finalAmountController,
+                controller: _originalPriceController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Final Amount (₹)',
+                  labelText: 'Original Ticket Price (₹)',
+                  hintText: 'What you would pay normally',
                   prefixIcon: Icon(Icons.currency_rupee),
+                  helperText: 'This amount will be frozen from your wallet',
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter amount';
+                    return 'Please enter the original price';
                   }
                   if (double.tryParse(value) == null) {
                     return 'Please enter a valid amount';
                   }
                   return null;
                 },
+                onChanged: (value) {
+                  // Auto-calculate discounted price (default 70% of original)
+                  if (value.isNotEmpty && double.tryParse(value) != null) {
+                    final original = double.parse(value);
+                    final discounted = (original * 0.7).round();
+                    _discountedPriceController.text = discounted.toString();
+                    setState(() {}); // Refresh to show profit info
+                  }
+                },
               ),
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _discountedPriceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Discounted Price (₹)',
+                  hintText: 'What buyer pays using their card',
+                  prefixIcon: Icon(Icons.discount_outlined),
+                  helperText: 'Price after card discount (buyer pays this)',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter the discounted price';
+                  }
+                  final discounted = double.tryParse(value);
+                  if (discounted == null) {
+                    return 'Please enter a valid amount';
+                  }
+                  final original = double.tryParse(_originalPriceController.text);
+                  if (original != null && discounted >= original) {
+                    return 'Discounted price must be less than original';
+                  }
+                  return null;
+                },
+                onChanged: (value) => setState(() {}),
+              ),
+              
+              // Show profit breakdown if both prices are entered
+              if (_originalPriceController.text.isNotEmpty && 
+                  _discountedPriceController.text.isNotEmpty &&
+                  double.tryParse(_originalPriceController.text) != null &&
+                  double.tryParse(_discountedPriceController.text) != null)
+                _buildProfitBreakdown(),
+              
               const SizedBox(height: 16),
 
               TextFormField(
@@ -375,6 +427,85 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: AppTheme.black,
+      ),
+    );
+  }
+
+  Widget _buildProfitBreakdown() {
+    final originalPrice = double.parse(_originalPriceController.text);
+    final discountedPrice = double.parse(_discountedPriceController.text);
+    
+    // Calculate profit breakdown (same logic as backend)
+    final buyerPayment = (originalPrice * 0.8).round();
+    final clientRefund = (originalPrice * 0.2).round();
+    final buyerProfit = buyerPayment - discountedPrice;
+    
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.success.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Profit Breakdown',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.success,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildBreakdownRow('You Pay', '₹${originalPrice.toInt()}', AppTheme.black),
+          _buildBreakdownRow('You Get Back', '₹$clientRefund', AppTheme.success),
+          const Divider(height: 16),
+          _buildBreakdownRow(
+            'Your Net Cost', 
+            '₹${originalPrice.toInt() - clientRefund}', 
+            AppTheme.primaryRed,
+            isBold: true,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You save ₹$clientRefund! 🎉',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.success,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreakdownRow(String label, String value, Color valueColor, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.darkGrey,
+              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              color: valueColor,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

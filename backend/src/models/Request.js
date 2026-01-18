@@ -56,6 +56,33 @@ const requestSchema = new mongoose.Schema(
       required: [true, 'Final amount is required'],
       min: 0,
     },
+    // Pricing breakdown for profit logic
+    originalPrice: {
+      type: Number,
+      required: [true, 'Original price is required'],
+      min: 0,
+    },
+    discountedPrice: {
+      type: Number,
+      required: [true, 'Discounted price is required'],
+      min: 0,
+    },
+    buyerPayment: {
+      type: Number,
+      default: 0, // Calculated: 80% of originalPrice
+    },
+    clientRefund: {
+      type: Number,
+      default: 0, // Calculated: 20% of originalPrice
+    },
+    buyerProfit: {
+      type: Number,
+      default: 0, // Calculated: buyerPayment - discountedPrice
+    },
+    appProfit: {
+      type: Number,
+      default: 0, // Calculated: originalPrice - buyerPayment
+    },
     eventUrl: {
       type: String,
       trim: true,
@@ -65,6 +92,16 @@ const requestSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'accepted', 'completed', 'rejected', 'timeout', 'cancelled'],
       default: 'pending',
+    },
+    // Client review tracking
+    clientReviewSubmitted: {
+      type: Boolean,
+      default: false,
+    },
+    clientReviewId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Review',
+      default: null,
     },
     screenshotUrl: {
       type: String,

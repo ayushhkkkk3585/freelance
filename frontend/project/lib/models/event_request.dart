@@ -9,6 +9,13 @@ class EventRequest {
   final String cardName;
   final String offerDetails;
   final double finalAmount;
+  // Pricing fields for profit logic
+  final double originalPrice;       // What client pays (e.g., 1000)
+  final double discountedPrice;     // What buyer pays using card (e.g., 700)
+  final double buyerPayment;        // What app pays buyer (e.g., 800)
+  final double clientRefund;        // What client gets back (e.g., 200)
+  final double buyerProfit;         // Buyer's profit (e.g., 100)
+  final double appProfit;           // App's profit (e.g., 200)
   final String? eventUrl;
   final String category;
   final String platform;
@@ -18,6 +25,9 @@ class EventRequest {
   final DateTime? completedAt;
   final DateTime createdAt;
   final DateTime? expiresAt;
+  // Client review tracking
+  final bool clientReviewSubmitted;
+  final String? clientReviewId;
 
   EventRequest({
     required this.id,
@@ -30,6 +40,12 @@ class EventRequest {
     required this.cardName,
     required this.offerDetails,
     required this.finalAmount,
+    this.originalPrice = 0,
+    this.discountedPrice = 0,
+    this.buyerPayment = 0,
+    this.clientRefund = 0,
+    this.buyerProfit = 0,
+    this.appProfit = 0,
     this.eventUrl,
     required this.category,
     required this.platform,
@@ -39,6 +55,8 @@ class EventRequest {
     this.completedAt,
     required this.createdAt,
     this.expiresAt,
+    this.clientReviewSubmitted = false,
+    this.clientReviewId,
   });
 
   factory EventRequest.fromJson(Map<String, dynamic> json) {
@@ -75,6 +93,12 @@ class EventRequest {
       cardName: json['cardName'] ?? '',
       offerDetails: json['offerDetails'] ?? '',
       finalAmount: (json['finalAmount'] ?? 0.0).toDouble(),
+      originalPrice: (json['originalPrice'] ?? json['finalAmount'] ?? 0.0).toDouble(),
+      discountedPrice: (json['discountedPrice'] ?? 0.0).toDouble(),
+      buyerPayment: (json['buyerPayment'] ?? 0.0).toDouble(),
+      clientRefund: (json['clientRefund'] ?? 0.0).toDouble(),
+      buyerProfit: (json['buyerProfit'] ?? 0.0).toDouble(),
+      appProfit: (json['appProfit'] ?? 0.0).toDouble(),
       eventUrl: json['eventUrl'],
       category: json['category'] ?? '',
       platform: json['platform'] ?? '',
@@ -92,6 +116,8 @@ class EventRequest {
       expiresAt: json['expiresAt'] != null || json['timerExpiresAt'] != null
           ? DateTime.parse(json['expiresAt'] ?? json['timerExpiresAt']) 
           : null,
+      clientReviewSubmitted: json['clientReviewSubmitted'] ?? false,
+      clientReviewId: json['clientReviewId'],
     );
   }
 
@@ -107,6 +133,12 @@ class EventRequest {
       'cardName': cardName,
       'offerDetails': offerDetails,
       'finalAmount': finalAmount,
+      'originalPrice': originalPrice,
+      'discountedPrice': discountedPrice,
+      'buyerPayment': buyerPayment,
+      'clientRefund': clientRefund,
+      'buyerProfit': buyerProfit,
+      'appProfit': appProfit,
       'eventUrl': eventUrl,
       'category': category,
       'platform': platform,
@@ -116,6 +148,8 @@ class EventRequest {
       'completedAt': completedAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'expiresAt': expiresAt?.toIso8601String(),
+      'clientReviewSubmitted': clientReviewSubmitted,
+      'clientReviewId': clientReviewId,
     };
   }
 
@@ -130,6 +164,12 @@ class EventRequest {
     String? cardName,
     String? offerDetails,
     double? finalAmount,
+    double? originalPrice,
+    double? discountedPrice,
+    double? buyerPayment,
+    double? clientRefund,
+    double? buyerProfit,
+    double? appProfit,
     String? eventUrl,
     String? category,
     String? platform,
@@ -139,6 +179,8 @@ class EventRequest {
     DateTime? completedAt,
     DateTime? createdAt,
     DateTime? expiresAt,
+    bool? clientReviewSubmitted,
+    String? clientReviewId,
   }) {
     return EventRequest(
       id: id ?? this.id,
@@ -151,6 +193,12 @@ class EventRequest {
       cardName: cardName ?? this.cardName,
       offerDetails: offerDetails ?? this.offerDetails,
       finalAmount: finalAmount ?? this.finalAmount,
+      originalPrice: originalPrice ?? this.originalPrice,
+      discountedPrice: discountedPrice ?? this.discountedPrice,
+      buyerPayment: buyerPayment ?? this.buyerPayment,
+      clientRefund: clientRefund ?? this.clientRefund,
+      buyerProfit: buyerProfit ?? this.buyerProfit,
+      appProfit: appProfit ?? this.appProfit,
       eventUrl: eventUrl ?? this.eventUrl,
       category: category ?? this.category,
       platform: platform ?? this.platform,
@@ -160,6 +208,8 @@ class EventRequest {
       completedAt: completedAt ?? this.completedAt,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
+      clientReviewSubmitted: clientReviewSubmitted ?? this.clientReviewSubmitted,
+      clientReviewId: clientReviewId ?? this.clientReviewId,
     );
   }
 
@@ -167,6 +217,12 @@ class EventRequest {
   bool get isAccepted => status == 'accepted';
   bool get isCompleted => status == 'completed';
   bool get isExpired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
+  
+  /// Check if client review is pending (request completed but review not submitted)
+  bool get isClientReviewPending => status == 'completed' && !clientReviewSubmitted;
+  
+  /// Get client's net cost after refund
+  double get clientNetCost => originalPrice - clientRefund;
   
   Duration? get remainingTime {
     if (expiresAt == null) return null;

@@ -18,6 +18,28 @@ const walletSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Buyer earnings tracking
+    totalEarnings: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalProfit: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // Client savings tracking
+    totalSavings: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalRefunds: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

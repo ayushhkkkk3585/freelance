@@ -67,7 +67,8 @@ class RequestService {
     required int quantity,
     required String cardName,
     required String offerDetails,
-    required double finalAmount,
+    required double originalPrice,      // What client pays (e.g., 1000)
+    required double discountedPrice,    // What buyer pays using card (e.g., 700)
     String? eventUrl,
     required String category,
     required String platform,
@@ -79,7 +80,8 @@ class RequestService {
       'quantity': quantity,
       'cardName': cardName,
       'offerDetails': offerDetails,
-      'finalAmount': finalAmount,
+      'originalPrice': originalPrice,
+      'discountedPrice': discountedPrice,
       if (eventUrl != null) 'eventUrl': eventUrl,
       'category': category,
       'platform': platform,

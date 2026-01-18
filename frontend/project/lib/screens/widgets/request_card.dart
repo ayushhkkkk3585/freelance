@@ -196,13 +196,26 @@ class RequestCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                Text(
-                  '₹${request.finalAmount.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryRed,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹${request.buyerPayment.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryRed,
+                      ),
+                    ),
+                    Text(
+                      'Profit: ₹${request.buyerProfit.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

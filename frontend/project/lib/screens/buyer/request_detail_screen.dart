@@ -495,28 +495,109 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
             ),
           ),
           const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Final Amount',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+          // Price Breakdown Section
+          _buildPriceRow('Original Price', request.originalPrice, isSubtle: true),
+          const SizedBox(height: 8),
+          _buildPriceRow('Your Purchase Price', request.discountedPrice, isSubtle: true),
+          const SizedBox(height: 8),
+          _buildPriceRow('You Receive (80%)', request.buyerPayment, isHighlight: true),
+          if (request.isCompleted) ...[
+            const SizedBox(height: 8),
+            _buildPriceRow('Your Profit', request.buyerProfit, isProfit: true),
+          ],
+          const Divider(height: 24),
+          // Earnings Summary for Buyer
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primaryRed.withOpacity(0.1),
+                  AppTheme.primaryRed.withOpacity(0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              Text(
-                '₹${request.finalAmount.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryRed,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.isCompleted ? 'You Earned' : 'Potential Earnings',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${request.buyerProfit.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    request.isCompleted ? Icons.check_circle : Icons.trending_up,
+                    color: AppTheme.success,
+                    size: 28,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPriceRow(String label, double amount, {bool isSubtle = false, bool isHighlight = false, bool isProfit = false}) {
+    Color textColor = AppTheme.darkGrey;
+    FontWeight fontWeight = FontWeight.w500;
+    
+    if (isSubtle) {
+      textColor = AppTheme.grey;
+      fontWeight = FontWeight.normal;
+    } else if (isHighlight) {
+      textColor = AppTheme.primaryRed;
+      fontWeight = FontWeight.w600;
+    } else if (isProfit) {
+      textColor = AppTheme.success;
+      fontWeight = FontWeight.bold;
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: isSubtle ? AppTheme.grey : AppTheme.darkGrey,
+          ),
+        ),
+        Text(
+          '₹${amount.toStringAsFixed(0)}',
+          style: TextStyle(
+            fontSize: isProfit ? 18 : 16,
+            fontWeight: fontWeight,
+            color: textColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -602,12 +683,26 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            'Earnings: ₹${request.finalAmount.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryRed,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.monetization_on, color: AppTheme.success, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Potential Profit: ₹${request.buyerProfit.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.success,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

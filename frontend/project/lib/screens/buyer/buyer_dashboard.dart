@@ -6,6 +6,7 @@ import '../../models/category.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/wallet_provider.dart';
 import '../widgets/request_card.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/empty_state.dart';
@@ -49,10 +50,12 @@ class _BuyerDashboardState extends State<BuyerDashboard>
     
     final requestProvider = Provider.of<RequestProvider>(context, listen: false);
     final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+    final walletProvider = Provider.of<WalletProvider>(context, listen: false);
     await Future.wait([
       requestProvider.fetchPendingRequests(refresh: true),
       requestProvider.fetchMyBookings(refresh: true),
       notificationProvider.fetchNotifications(refresh: true),
+      walletProvider.fetchWallet(),
     ]);
   }
 
@@ -210,47 +213,154 @@ class _BuyerDashboardState extends State<BuyerDashboard>
   }
 
   Widget _buildStatsCard() {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, child) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.cardShadow,
-          ),
-          child: Row(
-            children: [
-              _buildStatItem(
-                Icons.shopping_bag_outlined,
-                '${auth.user?.totalBookings ?? 0}',
-                'Total Bookings',
+    return Consumer2<AuthProvider, WalletProvider>(
+      builder: (context, auth, wallet, child) {
+        return Column(
+          children: [
+            // Balance Card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryRed, AppTheme.primaryRedDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryRed.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color: AppTheme.lightGrey,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Wallet Balance',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '₹${wallet.balance}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildBalanceItem('Total Earned', '₹${wallet.totalEarnings}'),
+                        Container(width: 1, height: 30, color: Colors.white30),
+                        _buildBalanceItem('Total Profit', '₹${wallet.totalProfit}'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              _buildStatItem(
-                Icons.credit_card_outlined,
-                '${auth.user?.cardsOwned.length ?? 0}',
-                'Cards',
+            ),
+            const SizedBox(height: 16),
+            // Stats Row
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppTheme.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: AppTheme.cardShadow,
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color: AppTheme.lightGrey,
+              child: Row(
+                children: [
+                  _buildStatItem(
+                    Icons.shopping_bag_outlined,
+                    '${auth.user?.totalBookings ?? 0}',
+                    'Total Bookings',
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: AppTheme.lightGrey,
+                  ),
+                  _buildStatItem(
+                    Icons.credit_card_outlined,
+                    '${auth.user?.cardsOwned.length ?? 0}',
+                    'Cards',
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: AppTheme.lightGrey,
+                  ),
+                  _buildStatItem(
+                    Icons.reviews_outlined,
+                    '${auth.user?.reviewCount ?? 0}',
+                    'Reviews',
+                  ),
+                ],
               ),
-              _buildStatItem(
-                Icons.reviews_outlined,
-                '${auth.user?.reviewCount ?? 0}',
-                'Reviews',
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildBalanceItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 

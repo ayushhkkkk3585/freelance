@@ -4,9 +4,19 @@ const { walletService, notificationService, timerService } = require('../service
 class RequestController {
   /**
    * Create new request (Client only)
+   * 
+   * PRICING LOGIC:
+   * - Client pays originalPrice (e.g., ₹1000 = 1000 points)
+   * - Buyer purchases at discountedPrice (e.g., ₹700) using their discount card
+   * - App pays buyer buyerPayment (80% of original = 800 points)
+   * - Client gets refund (20% of original = 200 points)
+   * - Buyer profit = buyerPayment - discountedPrice (800 - 700 = 100 points)
+   * - App profit = originalPrice - buyerPayment (1000 - 800 = 200 points)
    */
   async create(req, res) {
     try {
+      console.log('Create Request - Body:', JSON.stringify(req.body, null, 2));
+      
       const {
         eventName,
         location,
@@ -16,13 +26,40 @@ class RequestController {
         platform,
         cardName,
         offerDetails,
-        finalAmount,
+        originalPrice: originalPriceInput,      // What client pays (e.g., 1000)
+        discountedPrice: discountedPriceInput,  // What buyer pays using card (e.g., 700)
+        finalAmount,                             // Legacy field for backward compatibility
         eventUrl,
       } = req.body;
       
-      // Check client has enough balance
+      console.log('Parsed values:', { originalPriceInput, discountedPriceInput, finalAmount });
+      
+      // Handle backward compatibility: use finalAmount as originalPrice if not provided
+      const originalPrice = originalPriceInput || finalAmount;
+      // Default discountedPrice to 70% of originalPrice if not provided (30% discount)
+      const discountedPrice = discountedPriceInput || Math.round(originalPrice * 0.7);
+      
+      console.log('Final prices:', { originalPrice, discountedPrice });
+      
+      if (!originalPrice || originalPrice <= 0) {
+        console.log('Validation failed: originalPrice is invalid');
+        return res.status(400).json({
+          success: false,
+          message: 'Original price is required and must be greater than 0',
+        });
+      }
+      
+      // Calculate profit breakdown
+      const profitBreakdown = walletService.calculateProfitBreakdown(
+        originalPrice,
+        discountedPrice
+      );
+      
+      console.log('Profit breakdown:', profitBreakdown);
+      
+      // Check client has enough balance for original price
       const balance = await walletService.getBalance(req.userId);
-      if (balance.availableBalance < finalAmount) {
+      if (balance.availableBalance < originalPrice) {
         return res.status(400).json({
           success: false,
           message: 'Insufficient balance',
@@ -39,7 +76,13 @@ class RequestController {
         platform,
         cardName,
         offerDetails,
-        finalAmount,
+        finalAmount: originalPrice,
+        originalPrice,
+        discountedPrice,
+        buyerPayment: profitBreakdown.buyerPayment,
+        clientRefund: profitBreakdown.clientRefund,
+        buyerProfit: profitBreakdown.buyerProfit,
+        appProfit: profitBreakdown.appProfit,
         eventUrl,
       });
       await request.save();
@@ -61,7 +104,16 @@ class RequestController {
       res.status(201).json({
         success: true,
         message: 'Request created successfully',
-        data: { request },
+        data: { 
+          request,
+          profitBreakdown: {
+            clientPays: originalPrice,
+            clientRefund: profitBreakdown.clientRefund,
+            clientNetCost: originalPrice - profitBreakdown.clientRefund,
+            buyerEarns: profitBreakdown.buyerPayment,
+            buyerProfit: profitBreakdown.buyerProfit,
+          }
+        },
       });
     } catch (error) {
       console.error('Create request error:', error);
@@ -252,11 +304,11 @@ class RequestController {
         });
       }
       
-      // Freeze client's points
+      // Freeze client's original price amount
       try {
         await walletService.freezePoints(
           request.clientId._id,
-          request.finalAmount,
+          request.originalPrice,
           `Points frozen for ${request.eventName}`,
           request._id
         );
@@ -288,16 +340,16 @@ class RequestController {
       
       await notificationService.notifyPointsDeducted(
         request.clientId._id,
-        request.finalAmount,
+        request.originalPrice,
         request._id
       );
       
-      // Notify buyer about their acceptance
+      // Notify buyer about their acceptance with profit info
       await notificationService.create(
         req.userId,
         'request_accepted',
         'Request Accepted!',
-        `You have accepted "${request.eventName}". Complete within 5 minutes to earn ₹${request.finalAmount}.`,
+        `You have accepted "${request.eventName}". Complete within 5 minutes to earn ₹${request.buyerPayment} (Profit: ₹${request.buyerProfit}).`,
         { requestId: request._id }
       );
       
@@ -314,7 +366,15 @@ class RequestController {
       res.json({
         success: true,
         message: 'Request accepted. Timer started.',
-        data: { request: updatedRequest },
+        data: { 
+          request: updatedRequest,
+          profitInfo: {
+            buyerWillEarn: request.buyerPayment,
+            buyerProfit: request.buyerProfit,
+            clientWillPay: request.originalPrice,
+            clientWillGetRefund: request.clientRefund,
+          }
+        },
       });
     } catch (error) {
       console.error('Accept request error:', error);
@@ -383,12 +443,11 @@ class RequestController {
       
       console.log('Screenshot uploaded to:', req.file.path); // Debug log
       
-      // Complete payment (transfer points from client to buyer)
-      await walletService.completePayment(
+      // Complete payment with profit distribution
+      const paymentResult = await walletService.completePayment(
         request.clientId,
         request.buyerId,
-        request.finalAmount,
-        request._id
+        request
       );
       
       // Update buyer's successful deals
@@ -396,18 +455,29 @@ class RequestController {
         $inc: { successfulDeals: 1 },
       });
       
-      // Notify client
+      // Notify client about completion with refund info
       await notificationService.notifyRequestCompleted(
         request.clientId,
         request._id,
         request.eventName
       );
       
-      // Notify buyer
-      await notificationService.notifyPointsCredited(
+      // Notify client about their refund/savings
+      await notificationService.create(
+        request.clientId,
+        'points_refunded',
+        'Points Refunded!',
+        `You saved ₹${request.clientRefund} on "${request.eventName}". Net cost: ₹${request.originalPrice - request.clientRefund}.`,
+        { requestId: request._id }
+      );
+      
+      // Notify buyer with their earnings
+      await notificationService.create(
         request.buyerId,
-        request.finalAmount,
-        request._id
+        'points_credited',
+        'Payment Received!',
+        `You earned ₹${request.buyerPayment} for completing "${request.eventName}". Your profit: ₹${request.buyerProfit}.`,
+        { requestId: request._id }
       );
       
       // Refetch with populated fields
@@ -420,7 +490,9 @@ class RequestController {
         message: 'Booking completed successfully',
         data: { 
           request: updatedRequest,
-          screenshotUrl: request.screenshotUrl, // Cloudinary URL
+          screenshotUrl: request.screenshotUrl,
+          profitBreakdown: paymentResult.profitBreakdown,
+          clientReviewPending: !request.clientReviewSubmitted,
         },
       });
     } catch (error) {

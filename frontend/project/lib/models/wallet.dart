@@ -3,6 +3,12 @@ class Wallet {
   final String userId;
   final int balance;
   final int frozenAmount;
+  // Buyer earnings tracking
+  final int totalEarnings;
+  final int totalProfit;
+  // Client savings tracking
+  final int totalSavings;
+  final int totalRefunds;
   final DateTime updatedAt;
 
   Wallet({
@@ -10,6 +16,10 @@ class Wallet {
     required this.userId,
     required this.balance,
     this.frozenAmount = 0,
+    this.totalEarnings = 0,
+    this.totalProfit = 0,
+    this.totalSavings = 0,
+    this.totalRefunds = 0,
     required this.updatedAt,
   });
 
@@ -22,6 +32,10 @@ class Wallet {
       userId: json['userId'] ?? '',
       balance: json['balance'] ?? 0,
       frozenAmount: json['frozenAmount'] ?? 0,
+      totalEarnings: json['totalEarnings'] ?? 0,
+      totalProfit: json['totalProfit'] ?? 0,
+      totalSavings: json['totalSavings'] ?? 0,
+      totalRefunds: json['totalRefunds'] ?? 0,
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'])
           : DateTime.now(),
@@ -34,6 +48,10 @@ class Wallet {
       'userId': userId,
       'balance': balance,
       'frozenAmount': frozenAmount,
+      'totalEarnings': totalEarnings,
+      'totalProfit': totalProfit,
+      'totalSavings': totalSavings,
+      'totalRefunds': totalRefunds,
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
@@ -42,7 +60,7 @@ class Wallet {
 class Transaction {
   final String id;
   final String userId;
-  final String type; // debit, credit, refund, freeze, unfreeze
+  final String type; // debit, credit, refund, freeze, unfreeze, buyer_earning, client_refund, app_profit
   final int amount;
   final String description;
   final String? requestId;
@@ -114,10 +132,16 @@ class Transaction {
         return 'Unfrozen';
       case 'refund':
         return 'Refunded';
+      case 'buyer_earning':
+        return 'Earned';
+      case 'client_refund':
+        return 'Savings';
+      case 'app_profit':
+        return 'Commission';
       default:
         return type;
     }
   }
 
-  bool get isPositive => type == 'credit' || type == 'refund' || type == 'unfreeze';
+  bool get isPositive => type == 'credit' || type == 'refund' || type == 'unfreeze' || type == 'buyer_earning' || type == 'client_refund';
 }

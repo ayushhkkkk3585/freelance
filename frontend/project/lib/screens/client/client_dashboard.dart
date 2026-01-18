@@ -285,6 +285,31 @@ class _ClientDashboardState extends State<ClientDashboard> {
                   ),
                 ),
               ],
+              // Show total savings if any
+              if (wallet.totalSavings > 0) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.savings_outlined, color: Colors.greenAccent, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Total Saved: ₹${wallet.totalSavings.toStringAsFixed(0)} (20% refunds)',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [

@@ -13,6 +13,12 @@ class WalletProvider with ChangeNotifier {
   int get balance => _wallet?.balance ?? 0;
   int get frozenAmount => _wallet?.frozenAmount ?? 0;
   int get availableBalance => _wallet?.availableBalance ?? 0;
+  // Buyer earnings
+  int get totalEarnings => _wallet?.totalEarnings ?? 0;
+  int get totalProfit => _wallet?.totalProfit ?? 0;
+  // Client savings
+  int get totalSavings => _wallet?.totalSavings ?? 0;
+  int get totalRefunds => _wallet?.totalRefunds ?? 0;
   bool get isLoading => _isLoading;
   String? get error => _error;
 

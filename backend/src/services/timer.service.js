@@ -85,11 +85,11 @@ class TimerService {
       request.status = 'timeout';
       await request.save();
       
-      // Refund points to client
+      // Refund full frozen amount (originalPrice) to client on timeout
       await walletService.refundPoints(
         request.clientId._id,
-        request.finalAmount,
-        `Refund for timeout - ${request.eventName}`,
+        request.originalPrice,
+        `Full refund for timeout - ${request.eventName}`,
         requestId
       );
       
@@ -102,7 +102,7 @@ class TimerService {
       
       await notificationService.notifyPointsRefunded(
         request.clientId._id,
-        request.finalAmount,
+        request.originalPrice,
         requestId
       );
       
