@@ -1,0 +1,524 @@
+const { Request, User } = require('../models');
+const { walletService, notificationService, timerService } = require('../services');
+
+class RequestController {
+  /**
+   * Create new request (Client only)
+   */
+  async create(req, res) {
+    try {
+      const {
+        eventName,
+        location,
+        eventDate,
+        quantity,
+        category,
+        platform,
+        cardName,
+        offerDetails,
+        finalAmount,
+        eventUrl,
+      } = req.body;
+      
+      // Check client has enough balance
+      const balance = await walletService.getBalance(req.userId);
+      if (balance.availableBalance < finalAmount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient balance',
+        });
+      }
+      
+      const request = new Request({
+        clientId: req.userId,
+        eventName,
+        location,
+        eventDate,
+        quantity,
+        category,
+        platform,
+        cardName,
+        offerDetails,
+        finalAmount,
+        eventUrl,
+      });
+      await request.save();
+      
+      // Notify client
+      await notificationService.notifyRequestCreated(
+        req.userId,
+        request._id,
+        eventName
+      );
+      
+      // Notify all buyers about the new request
+      await notificationService.notifyBuyersNewRequest(
+        request._id,
+        eventName,
+        category
+      );
+      
+      res.status(201).json({
+        success: true,
+        message: 'Request created successfully',
+        data: { request },
+      });
+    } catch (error) {
+      console.error('Create request error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to create request',
+      });
+    }
+  }
+
+  /**
+   * Get all pending requests (Buyer only)
+   */
+  async getPendingRequests(req, res) {
+    try {
+      const { category, page = 1, limit = 20 } = req.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const query = { status: 'pending' };
+      if (category && category !== 'all') {
+        query.category = category;
+      }
+      
+      const requests = await Request.find(query)
+        .populate('clientId', 'name rating')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      const total = await Request.countDocuments(query);
+      
+      res.json({
+        success: true,
+        data: {
+          requests,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / parseInt(limit)),
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Get pending requests error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get requests',
+      });
+    }
+  }
+
+  /**
+   * Get client's requests
+   */
+  async getMyRequests(req, res) {
+    try {
+      const { status, page = 1, limit = 20 } = req.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const query = { clientId: req.userId };
+      if (status && status !== 'all') {
+        query.status = status;
+      }
+      
+      const requests = await Request.find(query)
+        .populate('buyerId', 'name rating profileImage')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      const total = await Request.countDocuments(query);
+      
+      res.json({
+        success: true,
+        data: {
+          requests,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / parseInt(limit)),
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Get my requests error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get requests',
+      });
+    }
+  }
+
+  /**
+   * Get buyer's accepted requests
+   */
+  async getBuyerRequests(req, res) {
+    try {
+      const { status, page = 1, limit = 20 } = req.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const query = { buyerId: req.userId };
+      if (status && status !== 'all') {
+        query.status = status;
+      }
+      
+      const requests = await Request.find(query)
+        .populate('clientId', 'name rating profileImage')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      const total = await Request.countDocuments(query);
+      
+      res.json({
+        success: true,
+        data: {
+          requests,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / parseInt(limit)),
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Get buyer requests error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get requests',
+      });
+    }
+  }
+
+  /**
+   * Get single request
+   */
+  async getRequest(req, res) {
+    try {
+      console.log('getRequest called with id:', req.params.id); // Debug log
+      const request = await Request.findById(req.params.id)
+        .populate('clientId', 'name email phone rating profileImage')
+        .populate('buyerId', 'name email phone rating profileImage cardsOwned');
+      
+      console.log('Request found:', request ? 'yes' : 'no'); // Debug log
+      
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found',
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: { request },
+      });
+    } catch (error) {
+      console.error('Get request error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get request',
+      });
+    }
+  }
+
+  /**
+   * Accept request (Buyer only)
+   */
+  async acceptRequest(req, res) {
+    try {
+      const request = await Request.findById(req.params.id)
+        .populate('clientId', 'name');
+      
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found',
+        });
+      }
+      
+      if (request.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Request is no longer available',
+        });
+      }
+      
+      // Freeze client's points
+      try {
+        await walletService.freezePoints(
+          request.clientId._id,
+          request.finalAmount,
+          `Points frozen for ${request.eventName}`,
+          request._id
+        );
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Client has insufficient balance',
+        });
+      }
+      
+      // Update request
+      request.status = 'accepted';
+      request.buyerId = req.userId;
+      await request.save();
+      
+      // Start timer
+      await timerService.startTimer(request._id);
+      
+      // Get buyer info
+      const buyer = await User.findById(req.userId);
+      
+      // Notify client
+      await notificationService.notifyRequestAccepted(
+        request.clientId._id,
+        request._id,
+        request.eventName,
+        buyer.name
+      );
+      
+      await notificationService.notifyPointsDeducted(
+        request.clientId._id,
+        request.finalAmount,
+        request._id
+      );
+      
+      // Notify buyer about their acceptance
+      await notificationService.create(
+        req.userId,
+        'request_accepted',
+        'Request Accepted!',
+        `You have accepted "${request.eventName}". Complete within 5 minutes to earn ₹${request.finalAmount}.`,
+        { requestId: request._id }
+      );
+      
+      // Update buyer's booking count
+      await User.findByIdAndUpdate(req.userId, {
+        $inc: { totalBookings: 1 },
+      });
+      
+      // Refetch with populated fields
+      const updatedRequest = await Request.findById(request._id)
+        .populate('clientId', 'name email phone rating profileImage')
+        .populate('buyerId', 'name email phone rating profileImage');
+      
+      res.json({
+        success: true,
+        message: 'Request accepted. Timer started.',
+        data: { request: updatedRequest },
+      });
+    } catch (error) {
+      console.error('Accept request error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to accept request',
+      });
+    }
+  }
+
+  /**
+   * Complete request with screenshot (Buyer only)
+   */
+  async completeRequest(req, res) {
+    try {
+      console.log('completeRequest called with id:', req.params.id); // Debug log
+      console.log('File received:', req.file ? JSON.stringify({
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        path: req.file.path,
+        filename: req.file.filename,
+      }) : 'No file'); // Debug log
+      
+      const request = await Request.findById(req.params.id);
+      
+      if (!request) {
+        console.log('Request not found'); // Debug log
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found',
+        });
+      }
+      
+      if (request.buyerId.toString() !== req.userId.toString()) {
+        console.log('Not authorized - buyerId:', request.buyerId, 'userId:', req.userId); // Debug log
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized',
+        });
+      }
+      
+      if (request.status !== 'accepted') {
+        console.log('Invalid status:', request.status); // Debug log
+        return res.status(400).json({
+          success: false,
+          message: 'Request cannot be completed',
+        });
+      }
+      
+      if (!req.file) {
+        console.log('No screenshot file provided'); // Debug log
+        return res.status(400).json({
+          success: false,
+          message: 'Screenshot is required',
+        });
+      }
+      
+      // Cancel timer
+      timerService.cancelTimer(request._id);
+      
+      // Update request - Cloudinary returns the URL in req.file.path
+      request.status = 'completed';
+      request.screenshotUrl = req.file.path; // Cloudinary URL
+      request.completedAt = new Date();
+      await request.save();
+      
+      console.log('Screenshot uploaded to:', req.file.path); // Debug log
+      
+      // Complete payment (transfer points from client to buyer)
+      await walletService.completePayment(
+        request.clientId,
+        request.buyerId,
+        request.finalAmount,
+        request._id
+      );
+      
+      // Update buyer's successful deals
+      await User.findByIdAndUpdate(req.userId, {
+        $inc: { successfulDeals: 1 },
+      });
+      
+      // Notify client
+      await notificationService.notifyRequestCompleted(
+        request.clientId,
+        request._id,
+        request.eventName
+      );
+      
+      // Notify buyer
+      await notificationService.notifyPointsCredited(
+        request.buyerId,
+        request.finalAmount,
+        request._id
+      );
+      
+      // Refetch with populated fields
+      const updatedRequest = await Request.findById(request._id)
+        .populate('clientId', 'name email photoUrl rating')
+        .populate('buyerId', 'name email photoUrl rating');
+
+      res.json({
+        success: true,
+        message: 'Booking completed successfully',
+        data: { 
+          request: updatedRequest,
+          screenshotUrl: request.screenshotUrl, // Cloudinary URL
+        },
+      });
+    } catch (error) {
+      console.error('Complete request error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to complete request',
+      });
+    }
+  }
+
+  /**
+   * Cancel request (Client only)
+   */
+  async cancelRequest(req, res) {
+    try {
+      const request = await Request.findById(req.params.id);
+      
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found',
+        });
+      }
+      
+      if (request.clientId.toString() !== req.userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized',
+        });
+      }
+      
+      if (!['pending'].includes(request.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Only pending requests can be cancelled',
+        });
+      }
+      
+      request.status = 'cancelled';
+      request.cancellationReason = req.body.reason || 'Cancelled by client';
+      await request.save();
+      
+      res.json({
+        success: true,
+        message: 'Request cancelled',
+        data: { request },
+      });
+    } catch (error) {
+      console.error('Cancel request error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to cancel request',
+      });
+    }
+  }
+
+  /**
+   * Get request statistics
+   */
+  async getStats(req, res) {
+    try {
+      const userId = req.userId;
+      const role = req.user.role;
+      
+      let stats;
+      
+      if (role === 'client') {
+        const [pending, accepted, completed, rejected] = await Promise.all([
+          Request.countDocuments({ clientId: userId, status: 'pending' }),
+          Request.countDocuments({ clientId: userId, status: 'accepted' }),
+          Request.countDocuments({ clientId: userId, status: 'completed' }),
+          Request.countDocuments({ clientId: userId, status: { $in: ['rejected', 'timeout'] } }),
+        ]);
+        
+        stats = { pending, accepted, completed, failed: rejected };
+      } else {
+        const [available, accepted, completed] = await Promise.all([
+          Request.countDocuments({ status: 'pending' }),
+          Request.countDocuments({ buyerId: userId, status: 'accepted' }),
+          Request.countDocuments({ buyerId: userId, status: 'completed' }),
+        ]);
+        
+        stats = { available, inProgress: accepted, completed };
+      }
+      
+      res.json({
+        success: true,
+        data: { stats },
+      });
+    } catch (error) {
+      console.error('Get stats error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get stats',
+      });
+    }
+  }
+}
+
+module.exports = new RequestController();
