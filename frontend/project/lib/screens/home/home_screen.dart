@@ -6,7 +6,8 @@ import '../../providers/auth_provider.dart';
 import '../client/client_dashboard.dart';
 import '../buyer/buyer_dashboard.dart';
 import '../profile/profile_screen.dart';
-import '../notifications/notifications_screen.dart';
+import '../apps/apps_screen.dart';
+import '../chat/chats_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
+  int _currentIndex = 1; // Start on Home tab
 
   @override
   void initState() {
@@ -51,14 +52,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final List<Widget> screens = isClient
         ? [
+            const AppsScreen(),
             const ClientDashboard(),
-            const NotificationsScreen(),
-            const ProfileScreen(),
+            const ChatsListScreen(),
           ]
         : [
+            const AppsScreen(),
             const BuyerDashboard(),
-            const NotificationsScreen(),
-            const ProfileScreen(),
+            const ChatsListScreen(),
           ];
 
     return Scaffold(
@@ -84,21 +85,21 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildNavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
-                  label: 'Home',
+                  icon: Icons.apps_outlined,
+                  activeIcon: Icons.apps,
+                  label: 'Apps',
                   index: 0,
                 ),
                 _buildNavItem(
-                  icon: Icons.notifications_outlined,
-                  activeIcon: Icons.notifications,
-                  label: 'Notifications',
+                  icon: Icons.home_outlined,
+                  activeIcon: Icons.home,
+                  label: 'Home',
                   index: 1,
                 ),
                 _buildNavItem(
-                  icon: Icons.person_outlined,
-                  activeIcon: Icons.person,
-                  label: 'Profile',
+                  icon: Icons.chat_bubble_outline,
+                  activeIcon: Icons.chat_bubble,
+                  label: 'Chat',
                   index: 2,
                 ),
               ],

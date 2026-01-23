@@ -9,6 +9,8 @@ import '../../screens/buyer/buyer_dashboard.dart';
 import '../../screens/buyer/request_detail_screen.dart';
 import '../../screens/profile/profile_screen.dart';
 import '../../screens/chat/chat_screen.dart';
+import '../../screens/chat/chats_list_screen.dart';
+import '../../screens/apps/apps_screen.dart';
 import '../../screens/notifications/notifications_screen.dart';
 
 class AppRoutes {
@@ -22,6 +24,8 @@ class AppRoutes {
   static const String requestDetail = '/request-detail';
   static const String profile = '/profile';
   static const String chat = '/chat';
+  static const String chatsList = '/chats-list';
+  static const String apps = '/apps';
   static const String notifications = '/notifications';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -53,6 +57,10 @@ class AppRoutes {
         ));
       case notifications:
         return _buildRoute(const NotificationsScreen());
+      case chatsList:
+        return _buildRoute(const ChatsListScreen());
+      case apps:
+        return _buildRoute(const AppsScreen());
       default:
         return _buildRoute(const SplashScreen());
     }

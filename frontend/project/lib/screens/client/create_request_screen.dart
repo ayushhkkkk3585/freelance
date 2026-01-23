@@ -19,6 +19,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final _cardNameController = TextEditingController();
   final _offerDetailsController = TextEditingController();
   final _originalPriceController = TextEditingController();
+  final _discountPercentController = TextEditingController(text: '30');
   final _discountedPriceController = TextEditingController();
   final _eventUrlController = TextEditingController();
 
@@ -34,9 +35,26 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     _cardNameController.dispose();
     _offerDetailsController.dispose();
     _originalPriceController.dispose();
+    _discountPercentController.dispose();
     _discountedPriceController.dispose();
     _eventUrlController.dispose();
     super.dispose();
+  }
+
+  void _calculateDiscountedPrice() {
+    final originalText = _originalPriceController.text;
+    final discountText = _discountPercentController.text;
+    
+    if (originalText.isNotEmpty && discountText.isNotEmpty) {
+      final original = double.tryParse(originalText);
+      final discountPercent = double.tryParse(discountText);
+      
+      if (original != null && discountPercent != null && discountPercent >= 0 && discountPercent <= 100) {
+        final discounted = (original * (100 - discountPercent) / 100).round();
+        _discountedPriceController.text = discounted.toString();
+        setState(() {});
+      }
+    }
   }
 
   Future<void> _selectDate() async {
@@ -331,42 +349,97 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                   }
                   return null;
                 },
-                onChanged: (value) {
-                  // Auto-calculate discounted price (default 70% of original)
-                  if (value.isNotEmpty && double.tryParse(value) != null) {
-                    final original = double.parse(value);
-                    final discounted = (original * 0.7).round();
-                    _discountedPriceController.text = discounted.toString();
-                    setState(() {}); // Refresh to show profit info
-                  }
-                },
+                onChanged: (value) => _calculateDiscountedPrice(),
               ),
               const SizedBox(height: 16),
 
+              // Discount Percentage Field
               TextFormField(
-                controller: _discountedPriceController,
+                controller: _discountPercentController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Discounted Price (₹)',
-                  hintText: 'What buyer pays using their card',
-                  prefixIcon: Icon(Icons.discount_outlined),
-                  helperText: 'Price after card discount (buyer pays this)',
+                decoration: InputDecoration(
+                  labelText: 'Card Discount (%)',
+                  hintText: 'Enter discount percentage',
+                  prefixIcon: const Icon(Icons.percent),
+                  helperText: 'How much discount does the card offer?',
+                  suffixText: '%',
+                  suffixStyle: TextStyle(
+                    color: AppTheme.success,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter the discounted price';
+                    return 'Please enter discount percentage';
                   }
-                  final discounted = double.tryParse(value);
-                  if (discounted == null) {
-                    return 'Please enter a valid amount';
+                  final percent = double.tryParse(value);
+                  if (percent == null) {
+                    return 'Please enter a valid percentage';
                   }
-                  final original = double.tryParse(_originalPriceController.text);
-                  if (original != null && discounted >= original) {
-                    return 'Discounted price must be less than original';
+                  if (percent < 0 || percent > 100) {
+                    return 'Percentage must be between 0 and 100';
                   }
                   return null;
                 },
-                onChanged: (value) => setState(() {}),
+                onChanged: (value) => _calculateDiscountedPrice(),
+              ),
+              const SizedBox(height: 16),
+
+              // Calculated Discounted Price (Read-only display)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGrey.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.grey.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.discount_outlined, color: AppTheme.success),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Discounted Price (Buyer pays)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _discountedPriceController.text.isNotEmpty 
+                                ? '₹${_discountedPriceController.text}'
+                                : '₹0',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_originalPriceController.text.isNotEmpty && 
+                        _discountPercentController.text.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '-${_discountPercentController.text}%',
+                          style: TextStyle(
+                            color: AppTheme.success,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               
               // Show profit breakdown if both prices are entered

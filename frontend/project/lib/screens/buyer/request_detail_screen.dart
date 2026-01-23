@@ -10,6 +10,7 @@ import '../../core/constants/app_constants.dart';
 import '../../models/event_request.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/request_provider.dart';
+import '../../services/review_service.dart';
 
 class RequestDetailScreen extends StatefulWidget {
   final String requestId;
@@ -23,6 +24,9 @@ class RequestDetailScreen extends StatefulWidget {
 class _RequestDetailScreenState extends State<RequestDetailScreen> {
   Timer? _timer;
   Duration _remainingTime = Duration.zero;
+  int _selectedRating = 0;
+  final _commentController = TextEditingController();
+  bool _isSubmittingReview = false;
 
   @override
   void initState() {
@@ -34,6 +38,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _commentController.dispose();
     super.dispose();
   }
 
@@ -244,6 +249,12 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                 
                 // Screenshot Preview
                 if (request.screenshotUrl != null) _buildScreenshotPreview(request),
+                
+                // Rating Section (for clients when request is completed)
+                if (_shouldShowRating(request)) _buildRatingSection(request),
+                
+                // Already Reviewed Message
+                if (_hasAlreadyReviewed(request)) _buildAlreadyReviewedCard(),
               ],
             ),
           );
@@ -822,4 +833,286 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       ),
     );
   }
+
+  bool _shouldShowRating(EventRequest request) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    return authProvider.isClient && 
+           request.isCompleted && 
+           !request.clientReviewSubmitted;
+  }
+
+  bool _hasAlreadyReviewed(EventRequest request) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    return authProvider.isClient && 
+           request.isCompleted && 
+           request.clientReviewSubmitted;
+  }
+
+  Widget _buildRatingSection(EventRequest request) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow,
+        border: Border.all(
+          color: AppTheme.primaryRed.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.star_rounded,
+                  color: AppTheme.primaryRed,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Rate the Buyer',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'How was your experience?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Star Rating
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (index) {
+              final starNumber = index + 1;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedRating = starNumber;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(
+                    starNumber <= _selectedRating
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 48,
+                    color: starNumber <= _selectedRating
+                        ? Colors.amber
+                        : AppTheme.grey.withOpacity(0.5),
+                  ),
+                ),
+              );
+            }),
+          ),
+          
+          // Rating Label
+          if (_selectedRating > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Center(
+                child: Text(
+                  _getRatingLabel(_selectedRating),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.amber,
+                  ),
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: 16),
+          
+          // Comment Field
+          TextFormField(
+            controller: _commentController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Write a comment (optional)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppTheme.grey.withOpacity(0.3)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppTheme.grey.withOpacity(0.3)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.primaryRed),
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Submit Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selectedRating > 0 && !_isSubmittingReview
+                  ? () => _submitReview(request)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                disabledBackgroundColor: AppTheme.grey.withOpacity(0.3),
+              ),
+              child: _isSubmittingReview
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Submit Rating',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getRatingLabel(int rating) {
+    switch (rating) {
+      case 1:
+        return 'Poor 😞';
+      case 2:
+        return 'Fair 😐';
+      case 3:
+        return 'Good 🙂';
+      case 4:
+        return 'Very Good 😊';
+      case 5:
+        return 'Excellent! 🌟';
+      default:
+        return '';
+    }
+  }
+
+  Future<void> _submitReview(EventRequest request) async {
+    setState(() {
+      _isSubmittingReview = true;
+    });
+
+    try {
+      await ReviewService.createReview(
+        requestId: request.id,
+        rating: _selectedRating,
+        comment: _commentController.text.trim().isNotEmpty 
+            ? _commentController.text.trim() 
+            : null,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thank you for your rating!'),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+
+      // Reload request to update the review status
+      _loadRequest();
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit rating: ${e.toString()}'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmittingReview = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildAlreadyReviewedCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.success.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle,
+              color: AppTheme.success,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rating Submitted',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.success,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Thank you for rating the buyer!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.darkGrey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

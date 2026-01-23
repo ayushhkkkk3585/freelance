@@ -114,22 +114,27 @@ class _ClientDashboardState extends State<ClientDashboard> {
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 25,
-                backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
-                backgroundImage: auth.user?.photoUrl != null
-                    ? NetworkImage(auth.user!.photoUrl!)
-                    : null,
-                child: auth.user?.photoUrl == null
-                    ? Text(
-                        auth.user?.name.substring(0, 1).toUpperCase() ?? 'U',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryRed,
-                        ),
-                      )
-                    : null,
+              GestureDetector(
+                onTap: () {
+                  Navigator.pushNamed(context, AppRoutes.profile);
+                },
+                child: CircleAvatar(
+                  radius: 25,
+                  backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
+                  backgroundImage: auth.user?.photoUrl != null
+                      ? NetworkImage(auth.user!.photoUrl!)
+                      : null,
+                  child: auth.user?.photoUrl == null
+                      ? Text(
+                          auth.user?.name.substring(0, 1).toUpperCase() ?? 'U',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryRed,
+                          ),
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
