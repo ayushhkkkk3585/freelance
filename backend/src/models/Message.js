@@ -32,6 +32,17 @@ const messageSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+    discountPercent: {
+      type: Number,
+      default: 30,
+      min: 0,
+      max: 100,
+    },
+    discountedPrice: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
     isRead: {
       type: Boolean,
       default: false,

@@ -71,7 +71,7 @@ class ChatController {
   async sendMessage(req, res) {
     try {
       const { requestId } = req.params;
-      const { content, isOffer, offerAmount } = req.body;
+      const { content, isOffer, offerAmount, discountPercent, discountedPrice } = req.body;
       
       const request = await Request.findById(requestId)
         .populate('clientId', 'name')
@@ -112,6 +112,12 @@ class ChatController {
       
       const receiverId = isClient ? request.buyerId._id : request.clientId._id;
       
+      // Calculate discountedPrice if not provided but offerAmount and discountPercent are
+      let calculatedDiscountedPrice = discountedPrice;
+      if (isOffer && offerAmount && discountPercent !== undefined && !discountedPrice) {
+        calculatedDiscountedPrice = Math.round(offerAmount * (100 - discountPercent) / 100);
+      }
+      
       const message = new Message({
         requestId,
         senderId: req.userId,
@@ -119,6 +125,8 @@ class ChatController {
         content,
         isOffer: isOffer || false,
         offerAmount: isOffer ? offerAmount : null,
+        discountPercent: isOffer ? (discountPercent !== undefined ? discountPercent : 30) : null,
+        discountedPrice: isOffer ? calculatedDiscountedPrice : null,
       });
       await message.save();
       

@@ -154,7 +154,7 @@ class RequestProvider with ChangeNotifier {
     }
   }
 
-  // Accept Request
+  // Accept Request (for buyers)
   Future<bool> acceptRequest(String requestId) async {
     _isLoading = true;
     _error = null;
@@ -164,6 +164,36 @@ class RequestProvider with ChangeNotifier {
       final updatedRequest = await RequestService.acceptRequest(requestId);
       _updateRequestInLists(updatedRequest);
       _acceptedRequests.insert(0, updatedRequest);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Accept Offer from Chat (for clients) - accepts buyer's negotiated offer with discount
+  // Uses the same discount logic as create request
+  Future<bool> acceptOfferFromChat(
+    String requestId, 
+    double offerAmount, 
+    {double discountPercent = 30}
+  ) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final updatedRequest = await RequestService.acceptOfferFromChat(
+        requestId, 
+        offerAmount,
+        discountPercent: discountPercent,
+      );
+      _updateRequestInLists(updatedRequest);
+      _currentRequest = updatedRequest;
       _isLoading = false;
       notifyListeners();
       return true;

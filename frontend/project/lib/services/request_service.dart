@@ -97,6 +97,21 @@ class RequestService {
     return EventRequest.fromJson(data['request']);
   }
 
+  // Accept Offer from Chat (for clients) - accepts buyer's negotiated offer with discount
+  // Uses the same discount logic as create request
+  static Future<EventRequest> acceptOfferFromChat(
+    String requestId, 
+    double offerAmount, 
+    {double discountPercent = 30}
+  ) async {
+    final response = await ApiService.post('/requests/$requestId/accept-offer', {
+      'offerAmount': offerAmount,
+      'discountPercent': discountPercent,
+    });
+    final data = response['data'] as Map<String, dynamic>;
+    return EventRequest.fromJson(data['request']);
+  }
+
   // Upload Screenshot and Complete (for buyers) - Mobile version
   static Future<EventRequest> completeRequest(
     String requestId,

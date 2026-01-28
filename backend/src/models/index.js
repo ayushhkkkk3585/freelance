@@ -6,4 +6,5 @@ module.exports = {
   Notification: require('./Notification'),
   Message: require('./Message'),
   Review: require('./Review'),
+  Offer: require('./Offer'),
 };

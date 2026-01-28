@@ -112,6 +112,14 @@ router.post(
   requestController.acceptRequest
 );
 
+// Accept offer from chat (Client only) - accepts buyer's negotiated offer
+router.post(
+  '/:id/accept-offer',
+  auth,
+  requireRole('client'),
+  requestController.acceptOfferFromChat
+);
+
 // Complete request with screenshot (Buyer only)
 router.post(
   '/:id/complete',

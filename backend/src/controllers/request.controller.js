@@ -505,6 +505,167 @@ class RequestController {
   }
 
   /**
+   * Accept offer from chat (Client only)
+   * This is called when a client accepts a buyer's offer from the chat with a negotiated price
+   * 
+   * Uses the same discount logic as create request:
+   * - originalPrice = offerAmount (what client pays)
+   * - discountPercent = discount percentage (default 30%)
+   * - discountedPrice = originalPrice * (100 - discountPercent) / 100 (what buyer pays with card)
+   */
+  async acceptOfferFromChat(req, res) {
+    try {
+      const { offerAmount, discountPercent: discountPercentInput } = req.body;
+      
+      if (!offerAmount || offerAmount <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Offer amount is required and must be greater than 0',
+        });
+      }
+      
+      // Use provided discount percent or default to 30%
+      const discountPercent = discountPercentInput !== undefined ? discountPercentInput : 30;
+      
+      // Validate discount percent
+      if (discountPercent < 0 || discountPercent > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Discount percent must be between 0 and 100',
+        });
+      }
+      
+      const request = await Request.findById(req.params.id)
+        .populate('buyerId', 'name');
+      
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found',
+        });
+      }
+      
+      // Verify the client owns this request
+      if (request.clientId.toString() !== req.userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to accept this offer',
+        });
+      }
+      
+      // Must have a buyer assigned (from chat)
+      if (!request.buyerId) {
+        return res.status(400).json({
+          success: false,
+          message: 'No buyer assigned to this request',
+        });
+      }
+      
+      if (request.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Request is no longer available for acceptance',
+        });
+      }
+      
+      // Apply the same discount logic as create request
+      // originalPrice = offerAmount (what client pays)
+      const originalPrice = offerAmount;
+      // discountedPrice = originalPrice * (100 - discountPercent) / 100 (what buyer pays using their discount card)
+      const discountedPrice = Math.round(originalPrice * (100 - discountPercent) / 100);
+      
+      // Calculate new profit breakdown
+      const profitBreakdown = walletService.calculateProfitBreakdown(
+        originalPrice,
+        discountedPrice
+      );
+      
+      // Check client has enough balance for the new offer amount
+      const balance = await walletService.getBalance(req.userId);
+      if (balance.availableBalance < originalPrice) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient balance for this offer amount',
+        });
+      }
+      
+      // Freeze client's points for the new offer amount
+      try {
+        await walletService.freezePoints(
+          req.userId,
+          originalPrice,
+          `Points frozen for ${request.eventName} (negotiated offer)`,
+          request._id
+        );
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to freeze points: ' + error.message,
+        });
+      }
+      
+      // Update request with new pricing and status
+      request.status = 'accepted';
+      request.finalAmount = originalPrice;
+      request.originalPrice = originalPrice;
+      request.discountedPrice = discountedPrice;
+      request.buyerPayment = profitBreakdown.buyerPayment;
+      request.clientRefund = profitBreakdown.clientRefund;
+      request.buyerProfit = profitBreakdown.buyerProfit;
+      request.appProfit = profitBreakdown.appProfit;
+      await request.save();
+      
+      // Start timer
+      await timerService.startTimer(request._id);
+      
+      // Get client info
+      const client = await User.findById(req.userId);
+      
+      // Notify buyer that client accepted their offer
+      await notificationService.create(
+        request.buyerId._id,
+        'offer_accepted',
+        'Offer Accepted!',
+        `${client.name} has accepted your offer of ₹${originalPrice} for "${request.eventName}". Timer started! Complete within 5 minutes to earn ₹${profitBreakdown.buyerPayment}.`,
+        { requestId: request._id.toString() }
+      );
+      
+      // Notify client about points frozen
+      await notificationService.notifyPointsDeducted(
+        req.userId,
+        originalPrice,
+        request._id
+      );
+      
+      // Refetch with populated fields
+      const updatedRequest = await Request.findById(request._id)
+        .populate('clientId', 'name email phone rating profileImage')
+        .populate('buyerId', 'name email phone rating profileImage');
+      
+      res.json({
+        success: true,
+        message: 'Offer accepted successfully. Timer started!',
+        data: { 
+          request: updatedRequest,
+          profitInfo: {
+            clientPays: originalPrice,
+            clientRefund: profitBreakdown.clientRefund,
+            clientNetCost: originalPrice - profitBreakdown.clientRefund,
+            buyerWillEarn: profitBreakdown.buyerPayment,
+            buyerProfit: profitBreakdown.buyerProfit,
+          }
+        },
+      });
+    } catch (error) {
+      console.error('Accept offer from chat error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to accept offer',
+      });
+    }
+  }
+
+  /**
    * Cancel request (Client only)
    */
   async cancelRequest(req, res) {

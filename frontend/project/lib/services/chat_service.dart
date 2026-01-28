@@ -16,11 +16,15 @@ class ChatService {
     required String content,
     bool isOffer = false,
     double? offerAmount,
+    double? discountPercent,
+    double? discountedPrice,
   }) async {
     final response = await ApiService.post('/chat/$requestId', {
       'content': content,
       'isOffer': isOffer,
       if (offerAmount != null) 'offerAmount': offerAmount,
+      if (discountPercent != null) 'discountPercent': discountPercent,
+      if (discountedPrice != null) 'discountedPrice': discountedPrice,
     });
     final data = response['data'] as Map<String, dynamic>;
     return Message.fromJson(data['message']);

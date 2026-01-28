@@ -6,4 +6,5 @@ module.exports = {
   notificationController: require('./notification.controller'),
   chatController: require('./chat.controller'),
   reviewController: require('./review.controller'),
+  offerController: require('./offer.controller'),
 };

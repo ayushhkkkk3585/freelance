@@ -21,6 +21,8 @@ const notificationSchema = new mongoose.Schema(
         'new_message',
         'new_review',
         'new_request',
+        'offer_accepted',
+        'offer_cancelled',
       ],
       required: true,
     },

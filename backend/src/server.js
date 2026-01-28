@@ -12,6 +12,7 @@ const walletRoutes = require('./routes/wallet.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const chatRoutes = require('./routes/chat.routes');
 const reviewRoutes = require('./routes/review.routes');
+const offerRoutes = require('./routes/offer.routes');
 
 // Import timer service
 const timerService = require('./services/timer.service');
@@ -34,6 +35,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/offers', offerRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
