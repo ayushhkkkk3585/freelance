@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/constants/app_constants.dart';
@@ -11,6 +12,7 @@ import '../../models/event_request.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../services/review_service.dart';
+import '../../services/escrow_service.dart';
 
 class RequestDetailScreen extends StatefulWidget {
   final String requestId;
@@ -27,6 +29,8 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
   int _selectedRating = 0;
   final _commentController = TextEditingController();
   bool _isSubmittingReview = false;
+  bool _isRejectingDispute = false;
+  bool _isAcceptingDispute = false;
 
   @override
   void initState() {
@@ -52,7 +56,9 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     final provider = Provider.of<RequestProvider>(context, listen: false);
     final request = provider.currentRequest;
     
-    if (request != null && request.isAccepted && request.expiresAt != null) {
+    // Only start timer if accepted AND screenshot not yet uploaded (not in escrow)
+    if (request != null && request.isAccepted && request.expiresAt != null && 
+        !request.isInEscrow && request.screenshotUrl == null) {
       _remainingTime = request.remainingTime ?? Duration.zero;
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (_remainingTime.inSeconds > 0) {
@@ -64,6 +70,10 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
           _loadRequest(); // Refresh to get updated status
         }
       });
+    } else {
+      // Cancel any existing timer if screenshot was uploaded
+      _timer?.cancel();
+      _remainingTime = Duration.zero;
     }
   }
 
@@ -115,6 +125,12 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     if (!mounted) return;
 
     if (success) {
+      // Cancel the timer immediately since screenshot was uploaded
+      _timer?.cancel();
+      setState(() {
+        _remainingTime = Duration.zero;
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Request completed with screenshot!'),
@@ -226,8 +242,8 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Timer Card (if accepted)
-                if (request.isAccepted) _buildTimerCard(request),
+                // Timer Card (only if accepted AND screenshot not yet uploaded)
+                if (request.isAccepted && !request.isInEscrow && request.screenshotUrl == null) _buildTimerCard(request),
                 
                 // Status Badge
                 _buildStatusBadge(request),
@@ -241,6 +257,10 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                 _buildOfferCard(request),
                 const SizedBox(height: 16),
 
+                // Client Info Card (only if request is accepted)
+                if (request.isAccepted) _buildClientInfoCard(request),
+                if (request.isAccepted) const SizedBox(height: 16),
+
                 // Action buttons for pending requests (Accept/Ignore)
                 if (_shouldShowActions(request)) _buildActionButtons(request, provider),
 
@@ -249,6 +269,12 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                 
                 // Screenshot Preview
                 if (request.screenshotUrl != null) _buildScreenshotPreview(request),
+                
+                // Escrow Verification Card (for clients when escrow is held)
+                if (_shouldShowEscrowVerification(request)) _buildEscrowVerificationCard(request),
+                
+                // Dispute Info Card (when there's an active or resolved dispute)
+                if (request.isDisputed || request.dispute?.resolved == true) _buildDisputeInfoCard(request),
                 
                 // Rating Section (for clients when request is completed)
                 if (_shouldShowRating(request)) _buildRatingSection(request),
@@ -573,6 +599,125 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildClientInfoCard(EventRequest request) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person, color: AppTheme.primaryRed),
+              const SizedBox(width: 8),
+              const Text(
+                'Client Information',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildDetailRow(Icons.account_circle, 'Name', request.clientName ?? 'N/A'),
+          if (request.clientPhone != null && request.clientPhone!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.phone, color: AppTheme.grey, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(
+                        request.clientPhone!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _callClient(request.clientPhone!),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.success.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppTheme.success),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.phone, size: 16, color: AppTheme.success),
+                              SizedBox(width: 4),
+                              Text(
+                                'Call',
+                                style: TextStyle(
+                                  color: AppTheme.success,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: AppTheme.info, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Contact the client if you have any questions about the request.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.info,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _callClient(String phone) async {
+    final url = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not launch phone dialer'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPriceRow(String label, double amount, {bool isSubtle = false, bool isHighlight = false, bool isProfit = false}) {
@@ -1049,12 +1194,27 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to submit rating: ${e.toString()}'),
-          backgroundColor: AppTheme.error,
-        ),
-      );
+      final errorMessage = e.toString();
+      
+      // If already reviewed, still reload to update UI
+      if (errorMessage.toLowerCase().contains('already reviewed') ||
+          errorMessage.toLowerCase().contains('already submitted')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You have already reviewed this request'),
+            backgroundColor: AppTheme.warning,
+          ),
+        );
+        // Reload request to hide the rating section
+        _loadRequest();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit rating: $errorMessage'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1113,6 +1273,457 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         ],
       ),
     );
+  }
+
+  bool _shouldShowEscrowVerification(EventRequest request) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    return authProvider.isClient && request.isInEscrow;
+  }
+
+  Widget _buildEscrowVerificationCard(EventRequest request) {
+    final remainingTime = request.escrowRemainingTime;
+    final isUrgent = remainingTime != null && remainingTime.inHours < 2;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isUrgent ? AppTheme.error.withOpacity(0.1) : AppTheme.warning.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isUrgent ? AppTheme.error : AppTheme.warning,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.verified_user_outlined,
+                color: isUrgent ? AppTheme.error : AppTheme.warning,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Ticket Needs Verification',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'The buyer has uploaded a ticket screenshot. Please verify that the ticket is valid and matches your request.',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppTheme.darkGrey,
+            ),
+          ),
+          if (remainingTime != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isUrgent ? AppTheme.error.withOpacity(0.2) : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.timer,
+                    color: isUrgent ? AppTheme.error : AppTheme.warning,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Time remaining: ${_formatEscrowTime(remainingTime)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isUrgent ? AppTheme.error : AppTheme.darkGrey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.ticketVerification,
+                  arguments: request.id,
+                );
+              },
+              icon: const Icon(Icons.visibility),
+              label: const Text('View & Verify Ticket'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Payment will be auto-released if you don\'t respond in time.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.grey,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisputeInfoCard(EventRequest request) {
+    final dispute = request.dispute;
+    final isResolved = dispute?.resolved ?? false;
+    final resolution = dispute?.resolution;
+    
+    Color cardColor;
+    IconData cardIcon;
+    String statusText;
+    
+    if (isResolved) {
+      if (resolution == 'client_wins') {
+        cardColor = AppTheme.success;
+        cardIcon = Icons.check_circle;
+        statusText = 'Dispute resolved in your favor';
+      } else if (resolution == 'dispute_rejected') {
+        cardColor = AppTheme.error;
+        cardIcon = Icons.cancel;
+        statusText = 'Dispute was rejected';
+      } else {
+        cardColor = AppTheme.warning;
+        cardIcon = Icons.gavel;
+        statusText = 'Dispute resolved';
+      }
+    } else {
+      cardColor = AppTheme.warning;
+      cardIcon = Icons.flag;
+      statusText = 'Dispute Active';
+    }
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cardColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(cardIcon, color: cardColor, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: cardColor,
+                      ),
+                    ),
+                    if (dispute?.raisedAt != null)
+                      Text(
+                        'Raised on ${_formatDisputeDate(dispute!.raisedAt!)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.grey,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (dispute?.reason != null) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            const Text(
+              'Dispute Reason:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                dispute!.reason!,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+          if (isResolved && dispute?.resolvedAt != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Resolved on ${_formatDisputeDate(dispute!.resolvedAt!)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          // Show Reject Dispute button for buyer when dispute is active
+          if (!isResolved) ...[
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 12),
+            _buildDisputeActions(request),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisputeActions(EventRequest request) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isBuyer = authProvider.isBuyer;
+
+    if (!isBuyer) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Dispute Actions',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Choose how to respond to this dispute:',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppTheme.grey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Accept Dispute Button (Refund client)
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isAcceptingDispute ? null : () => _acceptDispute(request),
+            icon: _isAcceptingDispute 
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.check_circle, size: 18),
+            label: Text(_isAcceptingDispute ? 'Processing...' : 'Accept Dispute (Refund Client)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.warning,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Reject Dispute Button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isRejectingDispute ? null : () => _rejectDispute(request),
+            icon: _isRejectingDispute 
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.cancel, size: 18),
+            label: Text(_isRejectingDispute ? 'Rejecting...' : 'Reject Dispute (Keep Payment)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _acceptDispute(EventRequest request) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Accept Dispute'),
+        content: const Text(
+          'By accepting the dispute, the client will be refunded and you will not receive payment for this request. Are you sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.warning,
+            ),
+            child: const Text('Yes, Accept Dispute'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isAcceptingDispute = true);
+
+    try {
+      final result = await EscrowService.acceptRefund(request.id);
+      
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Dispute accepted. Client has been refunded.'),
+              backgroundColor: AppTheme.warning,
+            ),
+          );
+          // Reload request to reflect changes
+          await _loadRequest();
+        }
+      } else {
+        throw Exception(result['message'] ?? 'Failed to accept dispute');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAcceptingDispute = false);
+      }
+    }
+  }
+
+  Future<void> _rejectDispute(EventRequest request) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Dispute'),
+        content: const Text(
+          'Are you sure this dispute is false? If approved, the payment will be completed and you will receive your earnings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.success,
+            ),
+            child: const Text('Yes, Reject Dispute'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isRejectingDispute = true);
+
+    try {
+      final result = await EscrowService.rejectDispute(request.id);
+      
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Dispute rejected successfully! Payment completed.'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+          // Reload request to reflect changes
+          await _loadRequest();
+        }
+      } else {
+        throw Exception(result['message'] ?? 'Failed to reject dispute');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRejectingDispute = false);
+      }
+    }
+  }
+
+  String _formatDisputeDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatEscrowTime(Duration duration) {
+    if (duration.inSeconds <= 0) return 'Expired';
+    
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
   }
 }
 

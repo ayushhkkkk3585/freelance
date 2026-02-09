@@ -5,8 +5,10 @@ import '../../screens/auth/register_screen.dart';
 import '../../screens/home/home_screen.dart';
 import '../../screens/client/client_dashboard.dart';
 import '../../screens/client/create_request_screen.dart';
+import '../../screens/client/ticket_verification_screen.dart';
 import '../../screens/buyer/buyer_dashboard.dart';
 import '../../screens/buyer/request_detail_screen.dart';
+import '../../screens/buyer/dispute_response_screen.dart';
 import '../../screens/profile/profile_screen.dart';
 import '../../screens/chat/chat_screen.dart';
 import '../../screens/chat/chats_list_screen.dart';
@@ -20,6 +22,8 @@ class AppRoutes {
   static const String home = '/home';
   static const String clientDashboard = '/client-dashboard';
   static const String createRequest = '/create-request';
+  static const String ticketVerification = '/ticket-verification';
+  static const String disputeResponse = '/dispute-response';
   static const String buyerDashboard = '/buyer-dashboard';
   static const String requestDetail = '/request-detail';
   static const String profile = '/profile';
@@ -42,6 +46,12 @@ class AppRoutes {
         return _buildRoute(const ClientDashboard());
       case createRequest:
         return _buildRoute(const CreateRequestScreen());
+      case ticketVerification:
+        final requestId = settings.arguments as String;
+        return _buildRoute(TicketVerificationScreen(requestId: requestId));
+      case disputeResponse:
+        final requestId = settings.arguments as String;
+        return _buildRoute(DisputeResponseScreen(requestId: requestId));
       case buyerDashboard:
         return _buildRoute(const BuyerDashboard());
       case requestDetail:

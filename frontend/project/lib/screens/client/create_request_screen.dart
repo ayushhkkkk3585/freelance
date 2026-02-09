@@ -144,9 +144,17 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     return Scaffold(
       backgroundColor: AppTheme.offWhite,
       appBar: AppBar(
-        title: const Text('Create Request'),
+        backgroundColor: AppTheme.primaryRed,
+        elevation: 0,
+        title: const Text(
+          'Create Request',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),

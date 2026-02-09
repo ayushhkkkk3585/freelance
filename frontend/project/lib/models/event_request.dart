@@ -1,7 +1,138 @@
+// Helper class for extracted verification data
+class ExtractedData {
+  final String? bookingId;
+  final String? amount;
+  final String? date;
+  final String? platform;
+
+  ExtractedData({
+    this.bookingId,
+    this.amount,
+    this.date,
+    this.platform,
+  });
+
+  factory ExtractedData.fromJson(Map<String, dynamic> json) {
+    return ExtractedData(
+      bookingId: json['bookingId']?.toString(),
+      amount: json['amount']?.toString(),
+      date: json['date']?.toString(),
+      platform: json['platform']?.toString(),
+    );
+  }
+}
+
+// Helper class for verification info
+class VerificationInfo {
+  final String status; // pending, verified, failed, manual_review
+  final ExtractedData? extractedData;
+  final List<String> warnings;
+  final double confidence;
+
+  VerificationInfo({
+    required this.status,
+    this.extractedData,
+    this.warnings = const [],
+    this.confidence = 0,
+  });
+
+  factory VerificationInfo.fromJson(Map<String, dynamic> json) {
+    return VerificationInfo(
+      status: json['status'] ?? 'pending',
+      extractedData: json['extractedData'] != null
+          ? ExtractedData.fromJson(json['extractedData'])
+          : null,
+      warnings: List<String>.from(json['warnings'] ?? []),
+      confidence: (json['confidence'] ?? 0).toDouble(),
+    );
+  }
+}
+
+// Helper class for escrow info
+class EscrowInfo {
+  final String status; // none, held, released, refunded, dispute
+  final DateTime? heldAt;
+  final DateTime? clientDeadline;
+  final DateTime? releasedAt;
+  final String? disputeReason;
+  final String? resolution;
+
+  EscrowInfo({
+    required this.status,
+    this.heldAt,
+    this.clientDeadline,
+    this.releasedAt,
+    this.disputeReason,
+    this.resolution,
+  });
+
+  factory EscrowInfo.fromJson(Map<String, dynamic> json) {
+    return EscrowInfo(
+      status: json['status'] ?? 'none',
+      heldAt: json['heldAt'] != null ? DateTime.parse(json['heldAt']) : null,
+      clientDeadline: json['clientDeadline'] != null
+          ? DateTime.parse(json['clientDeadline'])
+          : null,
+      releasedAt: json['releasedAt'] != null
+          ? DateTime.parse(json['releasedAt'])
+          : null,
+      disputeReason: json['disputeReason'],
+      resolution: json['resolution'],
+    );
+  }
+
+  Duration? get remainingTime {
+    if (clientDeadline == null) return null;
+    final diff = clientDeadline!.difference(DateTime.now());
+    return diff.isNegative ? Duration.zero : diff;
+  }
+}
+
+// Helper class for dispute info
+class DisputeInfo {
+  final bool isDisputed;
+  final String? raisedBy;
+  final DateTime? raisedAt;
+  final String? reason;
+  final bool resolved;
+  final String? resolution; // client_wins, buyer_wins, dispute_rejected
+  final DateTime? resolvedAt;
+
+  DisputeInfo({
+    this.isDisputed = false,
+    this.raisedBy,
+    this.raisedAt,
+    this.reason,
+    this.resolved = false,
+    this.resolution,
+    this.resolvedAt,
+  });
+
+  factory DisputeInfo.fromJson(Map<String, dynamic> json) {
+    return DisputeInfo(
+      isDisputed: json['isDisputed'] ?? false,
+      raisedBy: json['raisedBy']?.toString(),
+      raisedAt: json['raisedAt'] != null ? DateTime.parse(json['raisedAt']) : null,
+      reason: json['reason'],
+      resolved: json['resolved'] ?? false,
+      resolution: json['resolution'],
+      resolvedAt: json['resolvedAt'] != null ? DateTime.parse(json['resolvedAt']) : null,
+    );
+  }
+}
+
 class EventRequest {
   final String id;
   final String clientId;
   final String? buyerId;
+  // Client info (from populated object)
+  final String? clientName;
+  final String? clientPhone;
+  final String? clientEmail;
+  // Buyer info (from populated object)
+  final String? buyerName;
+  final String? buyerPhone;
+  final String? buyerEmail;
   final String eventName;
   final String location;
   final DateTime eventDate;
@@ -28,11 +159,22 @@ class EventRequest {
   // Client review tracking
   final bool clientReviewSubmitted;
   final String? clientReviewId;
+  // Escrow fields
+  final EscrowInfo? escrow;
+  final VerificationInfo? verification;
+  // Dispute fields
+  final DisputeInfo? dispute;
 
   EventRequest({
     required this.id,
     required this.clientId,
     this.buyerId,
+    this.clientName,
+    this.clientPhone,
+    this.clientEmail,
+    this.buyerName,
+    this.buyerPhone,
+    this.buyerEmail,
     required this.eventName,
     required this.location,
     required this.eventDate,
@@ -57,6 +199,9 @@ class EventRequest {
     this.expiresAt,
     this.clientReviewSubmitted = false,
     this.clientReviewId,
+    this.escrow,
+    this.verification,
+    this.dispute,
   });
 
   factory EventRequest.fromJson(Map<String, dynamic> json) {
@@ -80,10 +225,25 @@ class EventRequest {
       return value.toString();
     }
     
+    // Extract user details from populated objects
+    String? extractUserField(dynamic value, String field) {
+      if (value == null) return null;
+      if (value is Map<String, dynamic>) {
+        return value[field]?.toString();
+      }
+      return null;
+    }
+    
     return EventRequest(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       clientId: extractClientId(json['clientId']),
       buyerId: extractBuyerId(json['buyerId']),
+      clientName: extractUserField(json['clientId'], 'name'),
+      clientPhone: extractUserField(json['clientId'], 'phone'),
+      clientEmail: extractUserField(json['clientId'], 'email'),
+      buyerName: extractUserField(json['buyerId'], 'name'),
+      buyerPhone: extractUserField(json['buyerId'], 'phone'),
+      buyerEmail: extractUserField(json['buyerId'], 'email'),
       eventName: json['eventName'] ?? '',
       location: json['location'] ?? '',
       eventDate: json['eventDate'] != null 
@@ -118,6 +278,9 @@ class EventRequest {
           : null,
       clientReviewSubmitted: json['clientReviewSubmitted'] ?? false,
       clientReviewId: json['clientReviewId'],
+      escrow: json['escrow'] != null ? EscrowInfo.fromJson(json['escrow']) : null,
+      verification: json['verification'] != null ? VerificationInfo.fromJson(json['verification']) : null,
+      dispute: json['dispute'] != null ? DisputeInfo.fromJson(json['dispute']) : null,
     );
   }
 
@@ -126,6 +289,12 @@ class EventRequest {
       'id': id,
       'clientId': clientId,
       'buyerId': buyerId,
+      'clientName': clientName,
+      'clientPhone': clientPhone,
+      'clientEmail': clientEmail,
+      'buyerName': buyerName,
+      'buyerPhone': buyerPhone,
+      'buyerEmail': buyerEmail,
       'eventName': eventName,
       'location': location,
       'eventDate': eventDate.toIso8601String(),
@@ -150,6 +319,28 @@ class EventRequest {
       'expiresAt': expiresAt?.toIso8601String(),
       'clientReviewSubmitted': clientReviewSubmitted,
       'clientReviewId': clientReviewId,
+      'escrow': escrow != null ? {
+        'status': escrow!.status,
+        'heldAt': escrow!.heldAt?.toIso8601String(),
+        'clientDeadline': escrow!.clientDeadline?.toIso8601String(),
+        'releasedAt': escrow!.releasedAt?.toIso8601String(),
+        'disputeReason': escrow!.disputeReason,
+        'resolution': escrow!.resolution,
+      } : null,
+      'verification': verification != null ? {
+        'status': verification!.status,
+        'confidence': verification!.confidence,
+        'warnings': verification!.warnings,
+      } : null,
+      'dispute': dispute != null ? {
+        'isDisputed': dispute!.isDisputed,
+        'raisedBy': dispute!.raisedBy,
+        'raisedAt': dispute!.raisedAt?.toIso8601String(),
+        'reason': dispute!.reason,
+        'resolved': dispute!.resolved,
+        'resolution': dispute!.resolution,
+        'resolvedAt': dispute!.resolvedAt?.toIso8601String(),
+      } : null,
     };
   }
 
@@ -157,6 +348,12 @@ class EventRequest {
     String? id,
     String? clientId,
     String? buyerId,
+    String? clientName,
+    String? clientPhone,
+    String? clientEmail,
+    String? buyerName,
+    String? buyerPhone,
+    String? buyerEmail,
     String? eventName,
     String? location,
     DateTime? eventDate,
@@ -181,11 +378,20 @@ class EventRequest {
     DateTime? expiresAt,
     bool? clientReviewSubmitted,
     String? clientReviewId,
+    EscrowInfo? escrow,
+    VerificationInfo? verification,
+    DisputeInfo? dispute,
   }) {
     return EventRequest(
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
       buyerId: buyerId ?? this.buyerId,
+      clientName: clientName ?? this.clientName,
+      clientPhone: clientPhone ?? this.clientPhone,
+      clientEmail: clientEmail ?? this.clientEmail,
+      buyerName: buyerName ?? this.buyerName,
+      buyerPhone: buyerPhone ?? this.buyerPhone,
+      buyerEmail: buyerEmail ?? this.buyerEmail,
       eventName: eventName ?? this.eventName,
       location: location ?? this.location,
       eventDate: eventDate ?? this.eventDate,
@@ -210,6 +416,9 @@ class EventRequest {
       expiresAt: expiresAt ?? this.expiresAt,
       clientReviewSubmitted: clientReviewSubmitted ?? this.clientReviewSubmitted,
       clientReviewId: clientReviewId ?? this.clientReviewId,
+      escrow: escrow ?? this.escrow,
+      verification: verification ?? this.verification,
+      dispute: dispute ?? this.dispute,
     );
   }
 
@@ -223,6 +432,18 @@ class EventRequest {
   
   /// Get client's net cost after refund
   double get clientNetCost => originalPrice - clientRefund;
+  
+  /// Check if ticket is in escrow (waiting for client verification)
+  bool get isInEscrow => escrow?.status == 'held';
+  
+  /// Check if ticket needs verification (buyer uploaded, client needs to confirm)
+  bool get needsVerification => status == 'completed' && escrow?.status == 'held';
+  
+  /// Check if there's a dispute
+  bool get isDisputed => dispute?.isDisputed ?? escrow?.status == 'disputed';
+  
+  /// Get escrow deadline remaining time
+  Duration? get escrowRemainingTime => escrow?.remainingTime;
   
   Duration? get remainingTime {
     if (expiresAt == null) return null;

@@ -107,6 +107,69 @@ const requestSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    screenshotUploadedAt: {
+      type: Date,
+      default: null,
+    },
+    // Booking ID for duplicate prevention (extracted via OCR)
+    bookingId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+    // OCR Verification data
+    verification: {
+      status: {
+        type: String,
+        enum: ['pending', 'passed', 'rejected'],
+        default: 'pending',
+      },
+      extractedData: {
+        bookingId: String,
+        amount: Number,
+        date: String,
+        time: String,
+        platform: String,
+        rawText: String,
+      },
+      warnings: [String],
+      rejectReason: String,
+      confidence: Number,
+      verifiedAt: Date,
+    },
+    // Escrow for client confirmation
+    escrow: {
+      status: {
+        type: String,
+        enum: ['none', 'held', 'released', 'refunded', 'disputed'],
+        default: 'none',
+      },
+      heldAt: Date,
+      clientDeadline: Date,
+      releasedAt: Date,
+    },
+    // Dispute tracking
+    dispute: {
+      isDisputed: {
+        type: Boolean,
+        default: false,
+      },
+      raisedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      raisedAt: Date,
+      reason: String,
+      resolved: {
+        type: Boolean,
+        default: false,
+      },
+      resolution: {
+        type: String,
+        enum: ['client_wins', 'buyer_wins', 'dispute_rejected'],
+      },
+      resolvedAt: Date,
+    },
     timerStartedAt: {
       type: Date,
       default: null,

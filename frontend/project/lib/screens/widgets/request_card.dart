@@ -220,8 +220,9 @@ class RequestCard extends StatelessWidget {
               ],
             ),
 
-            // Timer (if showing)
-            if (showTimer && request.isAccepted && request.remainingTime != null) ...[
+            // Timer (if showing and screenshot not yet uploaded)
+            if (showTimer && request.isAccepted && request.remainingTime != null && 
+                !request.isInEscrow && request.screenshotUrl == null) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),

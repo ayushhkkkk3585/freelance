@@ -78,10 +78,16 @@ class RequestProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('fetchMyBookings called with status: $status'); // Debug
       _acceptedRequests = await RequestService.getMyBookings(status: status);
+      print('fetchMyBookings received ${_acceptedRequests.length} bookings'); // Debug
+      for (var req in _acceptedRequests) {
+        print('Booking: ${req.id} - ${req.eventName} - status: ${req.status}'); // Debug
+      }
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      print('fetchMyBookings error: $e'); // Debug
       _error = e.toString();
       _isLoading = false;
       notifyListeners();

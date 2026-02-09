@@ -162,7 +162,7 @@ class WalletService {
   /**
    * Unfreeze points (when booking completes or times out)
    */
-  async unfreezePoints(userId, amount, requestId = null) {
+  async unfreezePoints(userId, amount, description = 'Points unfrozen', requestId = null) {
     const wallet = await this.getWallet(userId);
     
     wallet.frozenAmount = Math.max(0, wallet.frozenAmount - amount);
@@ -174,7 +174,7 @@ class WalletService {
       userId,
       type: 'unfreeze',
       amount,
-      description: 'Points unfrozen',
+      description,
       requestId,
       balanceAfter: wallet.balance,
     });

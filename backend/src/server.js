@@ -13,6 +13,8 @@ const notificationRoutes = require('./routes/notification.routes');
 const chatRoutes = require('./routes/chat.routes');
 const reviewRoutes = require('./routes/review.routes');
 const offerRoutes = require('./routes/offer.routes');
+const escrowRoutes = require('./routes/escrow.routes');
+const testRoutes = require('./routes/test.routes');
 
 // Import timer service
 const timerService = require('./services/timer.service');
@@ -36,6 +38,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/escrow', escrowRoutes);
+app.use('/api/test', testRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

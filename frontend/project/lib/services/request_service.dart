@@ -44,9 +44,12 @@ class RequestService {
     String endpoint = '/requests/my-bookings?page=$page&limit=$limit';
     if (status != null) endpoint += '&status=$status';
     
+    print('getMyBookings calling endpoint: $endpoint'); // Debug
     final response = await ApiService.get(endpoint);
+    print('getMyBookings response: $response'); // Debug
     final data = response['data'] as Map<String, dynamic>?;
     final List<dynamic> requests = data?['requests'] ?? [];
+    print('getMyBookings parsed ${requests.length} requests'); // Debug
     return requests.map((json) => EventRequest.fromJson(json)).toList();
   }
 

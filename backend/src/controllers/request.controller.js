@@ -1,5 +1,6 @@
-const { Request, User } = require('../models');
+const { Request, User, Review } = require('../models');
 const { walletService, notificationService, timerService } = require('../services');
+const ticketVerificationService = require('../services/ticketVerification.service');
 
 class RequestController {
   /**
@@ -138,7 +139,7 @@ class RequestController {
       }
       
       const requests = await Request.find(query)
-        .populate('clientId', 'name rating')
+        .populate('clientId', 'name rating phone')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -180,7 +181,7 @@ class RequestController {
       }
       
       const requests = await Request.find(query)
-        .populate('buyerId', 'name rating profileImage')
+        .populate('buyerId', 'name rating profileImage phone')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -221,11 +222,32 @@ class RequestController {
         query.status = status;
       }
       
+      console.log('=========== getBuyerRequests DEBUG ===========');
+      console.log('userId from token:', req.userId);
+      console.log('Query:', JSON.stringify(query));
+      
       const requests = await Request.find(query)
-        .populate('clientId', 'name rating profileImage')
+        .populate('clientId', 'name rating profileImage phone')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
+      
+      console.log('Found requests count:', requests.length);
+      if (requests.length > 0) {
+        console.log('First request:', JSON.stringify({
+          id: requests[0]._id,
+          eventName: requests[0].eventName,
+          status: requests[0].status,
+          buyerId: requests[0].buyerId,
+        }));
+      }
+      
+      // Also check total requests in DB to compare
+      const allRequestsCount = await Request.countDocuments({});
+      const requestsWithBuyer = await Request.countDocuments({ buyerId: { $exists: true, $ne: null } });
+      console.log('Total requests in DB:', allRequestsCount);
+      console.log('Requests with any buyerId:', requestsWithBuyer);
+      console.log('==============================================');
       
       const total = await Request.countDocuments(query);
       
@@ -267,6 +289,22 @@ class RequestController {
           success: false,
           message: 'Request not found',
         });
+      }
+      
+      // Sync clientReviewSubmitted flag if out of sync
+      if (request.status === 'completed' && !request.clientReviewSubmitted) {
+        const existingReview = await Review.findOne({
+          requestId: request._id,
+          reviewerId: request.clientId._id,
+        });
+        
+        if (existingReview) {
+          // Update the flag
+          request.clientReviewSubmitted = true;
+          request.clientReviewId = existingReview._id;
+          await request.save();
+          console.log('Synced clientReviewSubmitted flag for request:', request._id);
+        }
       }
       
       res.json({
@@ -431,68 +469,119 @@ class RequestController {
           message: 'Screenshot is required',
         });
       }
+
+      const imagePath = req.file.path;
+
+      // Run OCR verification on the uploaded screenshot
+      console.log('Running OCR verification on:', imagePath);
+      const verification = await ticketVerificationService.verifyTicket(imagePath, request);
+      console.log('OCR Verification result:', {
+        approved: verification.approved,
+        autoRejected: verification.autoRejected,
+        warnings: verification.warnings,
+        confidence: verification.confidence,
+      });
+
+      // If auto-rejected (duplicate booking ID), reject the upload
+      if (verification.autoRejected) {
+        return res.status(400).json({
+          success: false,
+          message: verification.rejectReason,
+          verification: {
+            status: 'rejected',
+            reason: verification.rejectReason,
+            extractedData: verification.extractedData,
+          },
+          canRetry: true, // Buyer can upload a different screenshot
+        });
+      }
       
       // Cancel timer
       timerService.cancelTimer(request._id);
+
+      // Calculate escrow deadline (24 hours for client to verify)
+      const clientDeadline = new Date();
+      clientDeadline.setHours(clientDeadline.getHours() + 24);
       
-      // Update request - Cloudinary returns the URL in req.file.path
-      request.status = 'completed';
-      request.screenshotUrl = req.file.path; // Cloudinary URL
-      request.completedAt = new Date();
+      // Update request with screenshot and verification data
+      request.screenshotUrl = imagePath; // Cloudinary URL
+      request.screenshotUploadedAt = new Date();
+      request.bookingId = verification.extractedData.bookingId?.toUpperCase() || null;
+      request.verification = {
+        status: 'passed',
+        extractedData: verification.extractedData,
+        warnings: verification.warnings,
+        confidence: verification.confidence,
+        verifiedAt: new Date(),
+      };
+      request.escrow = {
+        status: 'held',
+        heldAt: new Date(),
+        clientDeadline: clientDeadline,
+      };
+      // Keep status as 'accepted' until client confirms
       await request.save();
       
-      console.log('Screenshot uploaded to:', req.file.path); // Debug log
+      console.log('Screenshot uploaded with OCR verification:', imagePath); // Debug log
+
+      // Notify client based on verification results
+      const hasWarnings = verification.warnings.length > 0;
       
-      // Complete payment with profit distribution
-      const paymentResult = await walletService.completePayment(
-        request.clientId,
-        request.buyerId,
-        request
-      );
-      
-      // Update buyer's successful deals
-      await User.findByIdAndUpdate(req.userId, {
-        $inc: { successfulDeals: 1 },
-      });
-      
-      // Notify client about completion with refund info
-      await notificationService.notifyRequestCompleted(
-        request.clientId,
-        request._id,
-        request.eventName
-      );
-      
-      // Notify client about their refund/savings
       await notificationService.create(
         request.clientId,
-        'points_refunded',
-        'Points Refunded!',
-        `You saved ₹${request.clientRefund} on "${request.eventName}". Net cost: ₹${request.originalPrice - request.clientRefund}.`,
-        { requestId: request._id }
+        hasWarnings ? 'ticket_needs_review' : 'ticket_uploaded',
+        hasWarnings ? '⚠️ Ticket Uploaded - Please Review' : '✅ Ticket Uploaded',
+        hasWarnings
+          ? `Buyer uploaded ticket with ${verification.warnings.length} warning(s). Please verify within 24 hours.`
+          : `Buyer has uploaded the ticket for "${request.eventName}". Please confirm within 24 hours.`,
+        { 
+          requestId: request._id.toString(),
+          warnings: verification.warnings,
+          extractedData: {
+            bookingId: verification.extractedData.bookingId,
+            amount: verification.extractedData.amount,
+            platform: verification.extractedData.platform,
+          },
+        }
       );
-      
-      // Notify buyer with their earnings
+
+      // Notify buyer that screenshot is pending verification
       await notificationService.create(
         request.buyerId,
-        'points_credited',
-        'Payment Received!',
-        `You earned ₹${request.buyerPayment} for completing "${request.eventName}". Your profit: ₹${request.buyerProfit}.`,
-        { requestId: request._id }
+        'screenshot_pending',
+        'Screenshot Uploaded',
+        `Your ticket screenshot is pending client verification. You'll be notified once confirmed.`,
+        { requestId: request._id.toString() }
       );
       
       // Refetch with populated fields
       const updatedRequest = await Request.findById(request._id)
-        .populate('clientId', 'name email photoUrl rating')
-        .populate('buyerId', 'name email photoUrl rating');
+        .populate('clientId', 'name email phone photoUrl rating')
+        .populate('buyerId', 'name email phone photoUrl rating');
 
       res.json({
         success: true,
-        message: 'Booking completed successfully',
+        message: hasWarnings
+          ? 'Screenshot uploaded with warnings. Waiting for client verification.'
+          : 'Screenshot uploaded successfully. Waiting for client confirmation.',
         data: { 
           request: updatedRequest,
           screenshotUrl: request.screenshotUrl,
-          profitBreakdown: paymentResult.profitBreakdown,
-          clientReviewPending: !request.clientReviewSubmitted,
+          verification: {
+            status: verification.approved ? 'passed' : 'rejected',
+            warnings: verification.warnings,
+            extractedData: {
+              bookingId: verification.extractedData.bookingId,
+              amount: verification.extractedData.amount,
+              date: verification.extractedData.date,
+              platform: verification.extractedData.platform,
+            },
+            confidence: verification.confidence,
+          },
+          escrow: {
+            status: 'held',
+            clientDeadline: clientDeadline,
+          },
         },
       });
     } catch (error) {

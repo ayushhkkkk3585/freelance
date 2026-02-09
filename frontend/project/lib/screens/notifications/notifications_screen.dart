@@ -61,6 +61,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.star_outline;
       case 'ticket_purchased':
         return Icons.confirmation_number_outlined;
+      // Escrow/Verification notification types
+      case 'ticket_uploaded':
+      case 'ticket_needs_review':
+        return Icons.upload_file_outlined;
+      case 'ticket_verified':
+      case 'ticket_confirmed':
+        return Icons.verified_outlined;
+      case 'escrow_held':
+        return Icons.lock_outline;
+      case 'escrow_released':
+      case 'escrow_auto_released':
+      case 'payment_released':
+      case 'payment_auto_released':
+        return Icons.lock_open_outlined;
+      case 'dispute_raised':
+        return Icons.flag_outlined;
+      case 'dispute_resolved':
+      case 'dispute_auto_resolved':
+        return Icons.gavel_outlined;
+      case 'dispute_lost':
+        return Icons.thumb_down_outlined;
+      case 'screenshot_pending':
+        return Icons.pending_outlined;
+      case 'screenshot_rejected':
+        return Icons.dangerous_outlined;
       default:
         return Icons.notifications_outlined;
     }
@@ -74,15 +99,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'request_completed':
       case 'ticket_purchased':
       case 'points_credited':
+      case 'ticket_verified':
+      case 'ticket_confirmed':
+      case 'escrow_released':
+      case 'escrow_auto_released':
+      case 'payment_released':
+      case 'payment_auto_released':
+      case 'dispute_resolved':
         return AppTheme.success;
       case 'request_rejected':
       case 'request_timeout':
       case 'timeout':
+      case 'screenshot_rejected':
+      case 'dispute_lost':
         return AppTheme.error;
       case 'points_deducted':
+      case 'dispute_raised':
+      case 'ticket_needs_review':
+      case 'escrow_held':
         return AppTheme.warning;
       case 'points_refunded':
       case 'refund_processed':
+      case 'ticket_uploaded':
         return AppTheme.info;
       case 'new_message':
       case 'new_review':
@@ -165,13 +203,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       if (!notification.isRead) {
                         provider.markAsRead(notification.id);
                       }
-                      // Navigate to related request if available
+                      // Navigate based on notification type
                       if (notification.hasRequest) {
-                        Navigator.pushNamed(
-                          context,
-                          AppRoutes.requestDetail,
-                          arguments: notification.requestId,
-                        );
+                        // Navigate to ticket verification for escrow-related notifications
+                        if (_isTicketVerificationNotification(notification.type)) {
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.ticketVerification,
+                            arguments: notification.requestId,
+                          );
+                        } else if (_isDisputeNotification(notification.type)) {
+                          // Navigate to dispute response for buyers
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.disputeResponse,
+                            arguments: notification.requestId,
+                          );
+                        } else {
+                          // Navigate to regular request detail
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.requestDetail,
+                            arguments: notification.requestId,
+                          );
+                        }
                       }
                     },
                     child: Container(
@@ -270,5 +325,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } else {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     }
+  }
+
+  bool _isTicketVerificationNotification(String type) {
+    return [
+      'ticket_uploaded',
+      'ticket_needs_review',
+      'escrow_held',
+    ].contains(type);
+  }
+
+  bool _isDisputeNotification(String type) {
+    return [
+      'dispute_raised',
+    ].contains(type);
   }
 }

@@ -39,13 +39,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     return Scaffold(
       backgroundColor: AppTheme.offWhite,
       appBar: AppBar(
-        backgroundColor: AppTheme.white,
+        backgroundColor: AppTheme.primaryRed,
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text(
           isBuyer ? 'My Offers' : 'Event Offers',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
         actions: [

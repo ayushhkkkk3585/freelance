@@ -22,6 +22,7 @@ class _BuyerDashboardState extends State<BuyerDashboard>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isInitialized = false;
+  String _bookingsFilter = 'all'; // all, accepted, completed
 
   @override
   void initState() {
@@ -47,6 +48,9 @@ class _BuyerDashboardState extends State<BuyerDashboard>
   Future<void> _loadData() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (!authProvider.isAuthenticated) return;
+    
+    print('BuyerDashboard - User ID: ${authProvider.user?.id}'); // Debug
+    print('BuyerDashboard - User totalBookings: ${authProvider.user?.totalBookings}'); // Debug
     
     final requestProvider = Provider.of<RequestProvider>(context, listen: false);
     final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
@@ -557,6 +561,59 @@ class _BuyerDashboardState extends State<BuyerDashboard>
     );
   }
 
+  Widget _buildInProgressBookings() {
+    return Consumer<RequestProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.acceptedRequests.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryRed),
+          );
+        }
+
+        // Filter for in-progress bookings (accepted status)
+        final inProgressRequests = provider.acceptedRequests
+            .where((r) => r.status == 'accepted')
+            .toList();
+
+        if (inProgressRequests.isEmpty) {
+          return const EmptyState(
+            icon: Icons.pending_actions_outlined,
+            title: 'No Active Bookings',
+            message: 'Accept requests to start earning',
+          );
+        }
+
+        return RefreshIndicator(
+          color: AppTheme.primaryRed,
+          onRefresh: () => provider.fetchMyBookings(refresh: true),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: inProgressRequests.length,
+            itemBuilder: (context, index) {
+              final request = inProgressRequests[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: RequestCard(
+                  request: request,
+                  showTimer: true,
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.requestDetail,
+                      arguments: request.id,
+                    ).then((_) {
+                      provider.fetchMyBookings(refresh: true);
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMyBookings() {
     return Consumer<RequestProvider>(
       builder: (context, provider, child) {
@@ -574,35 +631,300 @@ class _BuyerDashboardState extends State<BuyerDashboard>
           );
         }
 
+        // Filter bookings based on selected filter
+        List filteredRequests;
+        if (_bookingsFilter == 'accepted') {
+          filteredRequests = provider.acceptedRequests
+              .where((r) => r.status == 'accepted')
+              .toList();
+        } else if (_bookingsFilter == 'completed') {
+          filteredRequests = provider.acceptedRequests
+              .where((r) => r.status == 'completed')
+              .toList();
+        } else {
+          filteredRequests = provider.acceptedRequests;
+        }
+
+        return RefreshIndicator(
+          color: AppTheme.primaryRed,
+          onRefresh: () => provider.fetchMyBookings(refresh: true),
+          child: Column(
+            children: [
+              // Filter Chips
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    _buildFilterChip('All', 'all'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('In Progress', 'accepted'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Completed', 'completed'),
+                  ],
+                ),
+              ),
+              // Bookings List
+              Expanded(
+                child: filteredRequests.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No ${_bookingsFilter == 'all' ? '' : _bookingsFilter} bookings found',
+                          style: TextStyle(color: AppTheme.grey),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: filteredRequests.length,
+                        itemBuilder: (context, index) {
+                          final request = filteredRequests[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: request.status == 'completed'
+                                ? _buildCompletedBookingCard(request)
+                                : RequestCard(
+                                    request: request,
+                                    showTimer: request.status == 'accepted',
+                                    onTap: () {
+                                      Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.requestDetail,
+                                        arguments: request.id,
+                                      ).then((_) {
+                                        provider.fetchMyBookings(refresh: true);
+                                      });
+                                    },
+                                  ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _bookingsFilter == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _bookingsFilter = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryRed : AppTheme.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryRed : AppTheme.lightGrey,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.darkGrey,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompletedBookings() {
+    return Consumer<RequestProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading && provider.acceptedRequests.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryRed),
+          );
+        }
+
+        // Filter for completed bookings
+        final completedRequests = provider.acceptedRequests
+            .where((r) => r.status == 'completed')
+            .toList();
+
+        if (completedRequests.isEmpty) {
+          return const EmptyState(
+            icon: Icons.check_circle_outline,
+            title: 'No Completed Bookings',
+            message: 'Complete bookings to see your earnings here',
+          );
+        }
+
         return RefreshIndicator(
           color: AppTheme.primaryRed,
           onRefresh: () => provider.fetchMyBookings(refresh: true),
           child: ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: provider.acceptedRequests.length,
+            itemCount: completedRequests.length,
             itemBuilder: (context, index) {
-              final request = provider.acceptedRequests[index];
+              final request = completedRequests[index];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: RequestCard(
-                  request: request,
-                  showTimer: request.isAccepted,
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      AppRoutes.requestDetail,
-                      arguments: request.id,
-                    ).then((_) {
-                      // Refresh when coming back from detail screen
-                      provider.fetchMyBookings(refresh: true);
-                    });
-                  },
-                ),
+                child: _buildCompletedBookingCard(request),
               );
             },
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCompletedBookingCard(request) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          AppRoutes.requestDetail,
+          arguments: request.id,
+        ).then((_) {
+          final provider = Provider.of<RequestProvider>(context, listen: false);
+          provider.fetchMyBookings(refresh: true);
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppTheme.cardShadow,
+          border: Border.all(
+            color: AppTheme.success.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Success Badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    request.eventName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.check_circle, color: AppTheme.success, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Completed',
+                        style: TextStyle(
+                          color: AppTheme.success,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Event Details
+            Row(
+              children: [
+                Icon(Icons.location_on_outlined, size: 14, color: AppTheme.grey),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    request.location,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.darkGrey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.grey),
+                const SizedBox(width: 4),
+                Text(
+                  '${request.eventDate.day}/${request.eventDate.month}/${request.eventDate.year}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.darkGrey,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            // Earnings
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You Earned',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹${request.buyerProfit.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Payment Received',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹${request.buyerPayment.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.darkGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
