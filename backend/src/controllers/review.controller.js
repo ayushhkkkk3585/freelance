@@ -1,5 +1,6 @@
 const { Review, Request } = require('../models');
 const { notificationService } = require('../services');
+const mongoose = require('mongoose');
 
 class ReviewController {
   /**
@@ -105,18 +106,34 @@ class ReviewController {
       const { page = 1, limit = 20 } = req.query;
       const skip = (parseInt(page) - 1) * parseInt(limit);
       
-      const reviews = await Review.find({ revieweeId: userId })
+      console.log('Fetching reviews for userId:', userId);
+      
+      // Validate userId format
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid user ID format',
+        });
+      }
+      
+      // Convert userId to ObjectId for proper querying
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      console.log('Converted to ObjectId:', userObjectId);
+      
+      const reviews = await Review.find({ revieweeId: userObjectId })
         .populate('reviewerId', 'name profileImage')
         .populate('requestId', 'eventName')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
       
-      const total = await Review.countDocuments({ revieweeId: userId });
+      console.log('Found reviews count:', reviews.length);
+      
+      const total = await Review.countDocuments({ revieweeId: userObjectId });
       
       // Calculate average rating
       const stats = await Review.aggregate([
-        { $match: { revieweeId: require('mongoose').Types.ObjectId(userId) } },
+        { $match: { revieweeId: userObjectId } },
         {
           $group: {
             _id: null,

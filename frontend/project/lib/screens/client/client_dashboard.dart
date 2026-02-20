@@ -321,7 +321,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        // TODO: Add points
+                        Navigator.pushNamed(context, AppRoutes.addPoints);
                       },
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Add Points'),

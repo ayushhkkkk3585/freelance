@@ -121,45 +121,34 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
 
-              // Stats
-              SliverToBoxAdapter(
-                child: Container(
-                  margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: AppTheme.cardShadow,
-                  ),
-                  child: Row(
-                    children: [
-                      _buildStatItem(
-                        icon: Icons.shopping_bag_outlined,
-                        value: '${user.totalBookings}',
-                        label: 'Bookings',
-                      ),
-                      _buildDivider(),
-                      _buildStatItem(
-                        icon: Icons.star_outline,
-                        value: user.rating.toStringAsFixed(1),
-                        label: 'Rating',
-                      ),
-                      _buildDivider(),
-                      _buildStatItem(
-                        icon: Icons.handshake_outlined,
-                        value: '${user.dealCount}',
-                        label: 'Deals',
-                      ),
-                      _buildDivider(),
-                      _buildStatItem(
-                        icon: Icons.reviews_outlined,
-                        value: '${user.reviewCount}',
-                        label: 'Reviews',
-                      ),
-                    ],
+              // Stats (only for buyers)
+              if (user.role == 'buyer')
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppTheme.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: AppTheme.cardShadow,
+                    ),
+                    child: Row(
+                      children: [
+                        _buildStatItem(
+                          icon: Icons.shopping_bag_outlined,
+                          value: '${user.totalBookings}',
+                          label: 'Bookings',
+                        ),
+                        _buildDivider(),
+                        _buildStatItem(
+                          icon: Icons.star_outline,
+                          value: user.rating.toStringAsFixed(1),
+                          label: 'Rating',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
               // Cards Owned (for buyers)
               if (user.role == 'buyer' && user.cardsOwned.isNotEmpty)
@@ -199,11 +188,15 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildMenuItem(
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'Wallet',
-                        subtitle: 'Manage your points',
+                        icon: Icons.star_outline,
+                        title: 'Reviews',
+                        subtitle: 'View your reviews',
                         onTap: () {
-                          // TODO: Navigate to wallet
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.reviews,
+                            arguments: {'userId': user.id, 'userRole': user.role},
+                          );
                         },
                       ),
                       _buildMenuItem(
@@ -211,7 +204,7 @@ class ProfileScreen extends StatelessWidget {
                         title: 'Transaction History',
                         subtitle: 'View all transactions',
                         onTap: () {
-                          // TODO: Navigate to transactions
+                          Navigator.pushNamed(context, AppRoutes.transactionHistory);
                         },
                       ),
                       _buildMenuItem(
@@ -227,7 +220,7 @@ class ProfileScreen extends StatelessWidget {
                         title: 'Help & Support',
                         subtitle: 'Get help with your account',
                         onTap: () {
-                          // TODO: Navigate to help
+                          Navigator.pushNamed(context, AppRoutes.helpSupport);
                         },
                       ),
                       _buildMenuItem(
@@ -235,7 +228,7 @@ class ProfileScreen extends StatelessWidget {
                         title: 'About',
                         subtitle: 'App version and info',
                         onTap: () {
-                          // TODO: Show about dialog
+                          Navigator.pushNamed(context, AppRoutes.about);
                         },
                       ),
                       const SizedBox(height: 8),

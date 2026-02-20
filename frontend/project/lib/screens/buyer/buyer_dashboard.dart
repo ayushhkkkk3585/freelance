@@ -154,19 +154,19 @@ class _BuyerDashboardState extends State<BuyerDashboard>
                         Icon(Icons.star, color: Colors.amber, size: 16),
                         const SizedBox(width: 4),
                         Text(
-                          '${auth.user?.rating.toStringAsFixed(1) ?? '0.0'}',
+                          '${auth.user?.rating.toStringAsFixed(1) ?? '0.0'} out of 5',
                           style: TextStyle(
                             fontSize: 14,
                             color: AppTheme.grey,
                           ),
                         ),
-                        Text(
-                          ' • ${auth.user?.dealCount ?? 0} deals',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.grey,
-                          ),
-                        ),
+                        // Text(
+                        //   ' • ${auth.user?.dealCount ?? 0} deals',
+                        //   style: TextStyle(
+                        //     fontSize: 14,
+                        //     color: AppTheme.grey,
+                        //   ),
+                        // ),
                       ],
                     ),
                   ],
@@ -315,31 +315,12 @@ class _BuyerDashboardState extends State<BuyerDashboard>
                 boxShadow: AppTheme.cardShadow,
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildStatItem(
                     Icons.shopping_bag_outlined,
                     '${auth.user?.totalBookings ?? 0}',
                     'Total Bookings',
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: AppTheme.lightGrey,
-                  ),
-                  _buildStatItem(
-                    Icons.credit_card_outlined,
-                    '${auth.user?.cardsOwned.length ?? 0}',
-                    'Cards',
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: AppTheme.lightGrey,
-                  ),
-                  _buildStatItem(
-                    Icons.reviews_outlined,
-                    '${auth.user?.reviewCount ?? 0}',
-                    'Reviews',
                   ),
                 ],
               ),

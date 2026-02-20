@@ -57,6 +57,24 @@ class WalletProvider with ChangeNotifier {
     }
   }
 
+  // Add Points to Wallet
+  Future<void> addPoints(int amount) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _wallet = await WalletService.addPoints(amount);
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   // Clear Error
   void clearError() {
     _error = null;

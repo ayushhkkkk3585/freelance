@@ -232,10 +232,10 @@ class _BuyerProfileSheetState extends State<BuyerProfileSheet> {
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    icon: Icons.handshake_outlined,
+                    icon: Icons.reviews_outlined,
                     iconColor: AppTheme.success,
-                    value: '${_buyer!.dealCount}',
-                    label: 'Deals',
+                    value: '${_buyer!.reviewCount}',
+                    label: 'Reviews',
                   ),
                 ),
               ],

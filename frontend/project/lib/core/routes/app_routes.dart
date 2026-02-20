@@ -10,6 +10,11 @@ import '../../screens/buyer/buyer_dashboard.dart';
 import '../../screens/buyer/request_detail_screen.dart';
 import '../../screens/buyer/dispute_response_screen.dart';
 import '../../screens/profile/profile_screen.dart';
+import '../../screens/profile/reviews_screen.dart';
+import '../../screens/profile/about_screen.dart';
+import '../../screens/profile/help_support_screen.dart';
+import '../../screens/profile/transaction_history_screen.dart';
+import '../../screens/wallet/add_points_screen.dart';
 import '../../screens/chat/chat_screen.dart';
 import '../../screens/chat/chats_list_screen.dart';
 import '../../screens/apps/apps_screen.dart';
@@ -27,6 +32,11 @@ class AppRoutes {
   static const String buyerDashboard = '/buyer-dashboard';
   static const String requestDetail = '/request-detail';
   static const String profile = '/profile';
+  static const String reviews = '/reviews';
+  static const String about = '/about';
+  static const String helpSupport = '/help-support';
+  static const String transactionHistory = '/transaction-history';
+  static const String addPoints = '/add-points';
   static const String chat = '/chat';
   static const String chatsList = '/chats-list';
   static const String apps = '/apps';
@@ -59,6 +69,20 @@ class AppRoutes {
         return _buildRoute(RequestDetailScreen(requestId: requestId));
       case profile:
         return _buildRoute(const ProfileScreen());
+      case reviews:
+        final args = settings.arguments as Map<String, dynamic>;
+        return _buildRoute(ReviewsScreen(
+          userId: args['userId'],
+          userRole: args['userRole'],
+        ));
+      case about:
+        return _buildRoute(const AboutScreen());
+      case helpSupport:
+        return _buildRoute(const HelpSupportScreen());
+      case transactionHistory:
+        return _buildRoute(const TransactionHistoryScreen());
+      case addPoints:
+        return _buildRoute(const AddPointsScreen());
       case chat:
         final args = settings.arguments as Map<String, dynamic>;
         return _buildRoute(ChatScreen(
