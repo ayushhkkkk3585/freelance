@@ -336,7 +336,7 @@ class _ClientDashboardState extends State<ClientDashboard> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        // TODO: View history
+                        Navigator.pushNamed(context, AppRoutes.transactionHistory);
                       },
                       icon: const Icon(Icons.history, size: 18),
                       label: const Text('History'),

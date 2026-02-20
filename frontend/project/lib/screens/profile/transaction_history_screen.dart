@@ -379,20 +379,23 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   }
 
   String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
+    // Convert to IST (UTC + 5:30)
+    final istOffset = const Duration(hours: 5, minutes: 30);
+    final istDate = date.toUtc().add(istOffset);
+    final nowIst = DateTime.now().toUtc().add(istOffset);
+    final diff = nowIst.difference(istDate);
 
-    if (diff.inDays == 0) {
+    if (diff.inDays == 0 && istDate.day == nowIst.day) {
       // Today - show time
-      final hour = date.hour > 12 ? date.hour - 12 : date.hour;
-      final period = date.hour >= 12 ? 'PM' : 'AM';
-      return 'Today at ${hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $period';
-    } else if (diff.inDays == 1) {
+      final hour = istDate.hour == 0 ? 12 : (istDate.hour > 12 ? istDate.hour - 12 : istDate.hour);
+      final period = istDate.hour >= 12 ? 'PM' : 'AM';
+      return 'Today at ${hour.toString().padLeft(2, '0')}:${istDate.minute.toString().padLeft(2, '0')} $period';
+    } else if (diff.inDays == 1 || (diff.inDays == 0 && istDate.day != nowIst.day)) {
       return 'Yesterday';
     } else if (diff.inDays < 7) {
       return '${diff.inDays} days ago';
     } else {
-      return '${date.day}/${date.month}/${date.year}';
+      return '${istDate.day}/${istDate.month}/${istDate.year}';
     }
   }
 }
